@@ -1,0 +1,47 @@
+{
+  "kind": "anonymized-observation-excerpts",
+  "schemaVersion": 1,
+  "sourceAlias": "S08",
+  "scope": "Lossy whitelist excerpts; not a complete JSONL and not sufficient for full reconstruction.",
+  "cases": [
+    {
+      "name": "aborted-turn",
+      "startLine": 2,
+      "endLine": 196,
+      "startKind": "task_started",
+      "endKind": "turn_aborted",
+      "durationSec": 863.009
+    },
+    {
+      "name": "repeated-cumulative",
+      "previousLine": 189,
+      "repeatLine": 194,
+      "totalTokens": 2530733,
+      "lastTotalTokens": 137116,
+      "expectedAdditionalTotalTokens": 0
+    },
+    {
+      "name": "compaction-counter-divergence",
+      "usageLine": 655,
+      "compactedLine": 656,
+      "counterLine": 660,
+      "recordUsage": {
+        "input_tokens": 323850,
+        "output_tokens": 3630,
+        "total_tokens": 327480
+      },
+      "counterBeforeTotalTokens": 17036059,
+      "counterAfterTotalTokens": 17036059,
+      "counterLast": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 35160
+      },
+      "expectedScopeDifferenceTokens": 327480,
+      "endCounterTotalTokens": 38684885,
+      "endRecordThreadTotalTokens": 39012365
+    }
+  ]
+}
