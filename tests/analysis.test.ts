@@ -311,3 +311,80 @@ test("跨日闲置会话不能把没有活动的窗口当作完整会话跨度",
   );
   assert.equal(result.sessions.length, 0);
 });
+
+test("低于读取上限的大型合法会话不会使整批分析失败", () => {
+  const source = log("large", "/synthetic/large", 0, 40);
+  const counters = Array.from({ length: 150000 }, (_, i) =>
+    JSON.stringify({
+      timestamp: new Date(Date.UTC(2026, 9, 19, 1) + i).toISOString(),
+      type: "event_msg",
+      payload: {
+        type: "token_count",
+        info: { total_token_usage: { total_tokens: i } },
+      },
+    }),
+  ).join("\n");
+  const result = analyzeSources([
+    { ...source, text: source.text + "\n" + counters },
+  ]);
+  assert.equal(result.metrics.tokens, 149999);
+  assert.equal(result.metrics.workloadMs, 2400000);
+});
+
+test("同一时刻的矛盾终止类型明确记为冲突且不受顺序影响", () => {
+  const source = log("a", "/synthetic", 0, 10);
+  const end = JSON.parse(source.text.split("\n").at(-1)!);
+  const aborted = { ...end, payload: { ...end.payload, type: "turn_aborted" } };
+  const prefix = source.text.split("\n").slice(0, 2).join("\n");
+  for (const events of [
+    [end, aborted],
+    [aborted, end],
+  ]) {
+    const result = analyzeSources([
+      {
+        ...source,
+        text: prefix + "\n" + events.map((e) => JSON.stringify(e)).join("\n"),
+      },
+    ]);
+    assert.equal(result.sessions[0].turns[0].status, "unknown");
+    assert.equal(result.metrics.workloadMs, 0);
+    assert.ok(result.issues.some((i) => i.includes("冲突")));
+  }
+});
+
+test("同一响应的矛盾 Token 不取首条，跨来源交换顺序仍为未知", () => {
+  const source = log("a", "/synthetic", 0, 10);
+  const usage = (total: number) =>
+    JSON.stringify({
+      timestamp: "2026-10-19T01:05:00Z",
+      type: "token_usage_record",
+      payload: {
+        thread_id: "a",
+        turn_id: "t1",
+        response_id: "same-response",
+        usage: {
+          input_tokens: total - 20,
+          output_tokens: 20,
+          total_tokens: total,
+        },
+        thread_token_usage: { total_tokens: total },
+      },
+    });
+  const first = { ...source, text: source.text + "\n" + usage(100) },
+    second = {
+      ...source,
+      alias: "archived",
+      text: source.text + "\n" + usage(200),
+    };
+  for (const sources of [
+    [first, second],
+    [second, first],
+  ]) {
+    const result = analyzeSources(sources);
+    assert.equal(result.metrics.tokens, null);
+    assert.equal(result.sessions[0].tokenComplete, false);
+    assert.ok(
+      result.issues.some((i) => i.includes("Token") && i.includes("冲突")),
+    );
+  }
+});

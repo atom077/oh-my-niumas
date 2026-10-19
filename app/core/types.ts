@@ -58,6 +58,7 @@ export interface Session {
   tokenMode: "record" | "counter" | "unknown";
   tokenComplete: boolean;
   recordSeen: boolean;
+  conflictedUsageIds: string[];
   workloadMs: number;
   spanMs: number | null;
   waitingMs: number | null;

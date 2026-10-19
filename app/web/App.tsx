@@ -28,7 +28,7 @@ const statusText: Record<string, string> = {
   completed: "已完成",
   aborted: "已中止",
   failed: "失败",
-  unknown: "缺少结束",
+  unknown: "未知 / 未闭合",
 };
 const today = () =>
   new Intl.DateTimeFormat("en-CA", {
@@ -810,7 +810,13 @@ function SessionDetail({
                 </p>
               </div>
               <span className={"turn-status " + t.status}>
-                {statusText[t.status]}
+                {t.status === "unknown"
+                  ? t.end === null
+                    ? "缺少结束"
+                    : t.start === null
+                      ? "缺少开始"
+                      : "边界冲突"
+                  : statusText[t.status]}
               </span>
             </div>
           );

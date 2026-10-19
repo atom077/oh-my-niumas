@@ -147,7 +147,7 @@ export function Timeline({
         formatter: (p: unknown) => {
           const v = (p as { value: number[] }).value;
           return v[3] === 2
-            ? `${time(v[1])} · 结束未知<br/>未计入精确执行时长`
+            ? `${time(v[1])} · 边界未知或冲突<br/>未计入精确执行时长`
             : v[3] === 3
               ? `${time(v[1])} · 输入观测事件`
               : `${time(v[1])} — ${time(v[2])}<br/>${v[3] === 1 ? "闭合等待" : "AI 执行"} ${duration(v[2] - v[1])}<br/>点击查看会话 · Asia/Shanghai`;

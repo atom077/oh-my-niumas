@@ -20,6 +20,29 @@ const addIssue = (s: Session, text: string) => {
   if (!s.issues.includes(text)) s.issues.push(text);
 };
 
+function timeBounds(values: number[]) {
+  let min: number | null = null;
+  let max: number | null = null;
+  for (const value of values) {
+    if (min === null || value < min) min = value;
+    if (max === null || value > max) max = value;
+  }
+  return { min, max };
+}
+
+function sameUsage(a: Usage, b: Usage) {
+  return (
+    a.at === b.at &&
+    a.turnId === b.turnId &&
+    a.tokens === b.tokens &&
+    a.input === b.input &&
+    a.cached === b.cached &&
+    a.output === b.output &&
+    a.reasoning === b.reasoning &&
+    a.threadTotal === b.threadTotal
+  );
+}
+
 function tokenValues(raw: unknown) {
   const v = record(raw);
   if (
@@ -104,6 +127,7 @@ export function normalizeSources(sources: Source[]): Dataset {
         tokenMode: "unknown",
         tokenComplete: false,
         recordSeen: false,
+        conflictedUsageIds: [],
         workloadMs: 0,
         spanMs: null,
         waitingMs: null,
@@ -123,7 +147,8 @@ export function normalizeSources(sources: Source[]): Dataset {
     if (metas.some((m) => m.cwd !== meta.cwd))
       addIssue(s, "工作目录发生变化，保留起始目录归属");
     const turns = new Map(s.turns.map((t) => [t.id, t]));
-    const usageIds = new Set(s.usage.map((u) => u.id));
+    const usageById = new Map(s.usage.map((u) => [u.id, u]));
+    const conflictedUsageIds = new Set(s.conflictedUsageIds);
     const inputIds = new Set(s.inputs.map((i) => i.id));
     const counterIds = new Set(s.counters.map((c) => `${c.at}:${c.total}`));
     for (const { value: v, line } of rows) {
@@ -153,9 +178,8 @@ export function normalizeSources(sources: Source[]): Dataset {
           continue;
         }
         const uid = key(`${meta.id}:${p.response_id}`);
-        if (usageIds.has(uid)) continue;
-        usageIds.add(uid);
-        s.usage.push({
+        if (conflictedUsageIds.has(uid)) continue;
+        const entry: Usage = {
           id: uid,
           at,
           turnId: tid,
@@ -164,7 +188,18 @@ export function normalizeSources(sources: Source[]): Dataset {
             ? p.thread_token_usage.total_tokens
             : null,
           evidence,
-        });
+        };
+        const previous = usageById.get(uid);
+        if (previous) {
+          if (!sameUsage(previous, entry)) {
+            addIssue(s, "同一响应 Token 记录冲突，已排除");
+            conflictedUsageIds.add(uid);
+            s.conflictedUsageIds.push(uid);
+          }
+          continue;
+        }
+        usageById.set(uid, entry);
+        s.usage.push(entry);
       }
       if (v.type !== "event_msg") continue;
       if (p.type === "token_count") {
@@ -216,17 +251,22 @@ export function normalizeSources(sources: Source[]): Dataset {
           turn.conflict = true;
         } else turn.start = at;
       } else {
-        if (turn.end !== null && turn.end !== at) {
+        const status =
+          p.type === "turn_aborted"
+            ? "aborted"
+            : isFailure
+              ? "failed"
+              : "completed";
+        if (
+          turn.end !== null &&
+          (turn.end !== at ||
+            (turn.status !== "unknown" && turn.status !== status))
+        ) {
           addIssue(s, "重复终止冲突");
           turn.conflict = true;
         } else {
           turn.end = at;
-          turn.status =
-            p.type === "turn_aborted"
-              ? "aborted"
-              : isFailure
-                ? "failed"
-                : "completed";
+          turn.status = status;
         }
       }
       if (
@@ -242,6 +282,8 @@ export function normalizeSources(sources: Source[]): Dataset {
     );
   }
   for (const s of unique.values()) {
+    const conflictedUsageIds = new Set(s.conflictedUsageIds);
+    s.usage = s.usage.filter((u) => !conflictedUsageIds.has(u.id));
     for (const t of s.turns) {
       if (t.conflict) t.status = "unknown";
       if (t.start !== null && t.end !== null && t.end < t.start) {
@@ -308,8 +350,9 @@ export function normalizeSources(sources: Source[]): Dataset {
         s.counters.map((c) => c.at),
       )
       .filter((v): v is number => v !== null);
-    s.firstAt = times.length ? Math.min(...times) : null;
-    s.lastAt = times.length ? Math.max(...times) : null;
+    const bounds = timeBounds(times);
+    s.firstAt = bounds.min;
+    s.lastAt = bounds.max;
   }
   return {
     sessions: [...unique.values()],
@@ -323,9 +366,10 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
   const times = dataset.sessions
     .flatMap((s) => [s.firstAt, s.lastAt])
     .filter((v): v is number => v !== null);
+  const bounds = timeBounds(times);
   const extent = {
-    from: times.length ? Math.min(...times) : Date.UTC(2026, 9, 19, 1),
-    to: times.length ? Math.max(...times) + 1 : Date.UTC(2026, 9, 19, 2),
+    from: bounds.min ?? Date.UTC(2026, 9, 19, 1),
+    to: bounds.max === null ? Date.UTC(2026, 9, 19, 2) : bounds.max + 1,
   };
   if (extent.from === extent.to) extent.to += 60_000;
   const window = { from: query.from ?? extent.from, to: query.to ?? extent.to };
@@ -388,9 +432,11 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
           Math.max(t.start!, window.from),
           Math.min(t.end!, window.to),
         );
-    s.spanMs = activityPoints.length
-      ? Math.max(...activityPoints) - Math.min(...activityPoints)
-      : null;
+    const activityBounds = timeBounds(activityPoints);
+    s.spanMs =
+      activityBounds.min === null || activityBounds.max === null
+        ? null
+        : activityBounds.max - activityBounds.min;
     const usage = s.usage.filter(
       (u) => u.at >= window.from && u.at < window.to,
     );
