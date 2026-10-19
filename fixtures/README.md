@@ -7,6 +7,7 @@
 | [observed/s01-multiturn.json](observed/s01-multiturn.json) | 真实日志的匿名白名单投影 | 一个完整三轮样本的边界、输入观测与 Token 记录；只选取必要事件，保留匿名源行号 |
 | [observed/s08-anomalies.json](observed/s08-anomalies.json) | 真实日志的匿名摘录 | 中止、重复累计、上下文压缩后两条计数路径分歧；不是完整事件流 |
 | [synthetic/acceptance-vectors.json](synthetic/acceptance-vectors.json) | 完全合成 | 100 min / 50 min / 2.0× 并发样例、裁切、跨日和 Token 子集验收向量 |
+| [import-smoke/sessions/synthetic.jsonl](import-smoke/sessions/synthetic.jsonl) | 完全合成的原始格式 | 浏览器测试专用的隔离导入根，10 分钟 / 100 Token；不读取用户真实日志 |
 
 ## 脱敏方式
 

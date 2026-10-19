@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-19T01:00:00Z","type":"session_meta","payload":{"id":"synthetic-http-session","cwd":"/synthetic/http-demo","cli_version":"0.163.0-alpha.10.2"}}
+{"timestamp":"2026-10-19T01:00:00Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-one"}}
+{"timestamp":"2026-10-19T01:09:00Z","type":"token_usage_record","payload":{"thread_id":"synthetic-http-session","turn_id":"turn-one","response_id":"response-one","usage":{"input_tokens":80,"output_tokens":20,"total_tokens":100},"thread_token_usage":{"total_tokens":100}}}
+{"timestamp":"2026-10-19T01:10:00Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-one"}}

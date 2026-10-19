@@ -1,6 +1,6 @@
 # 精简 UX 与四页线框
 
-状态：2026-10-19 设计草案；本文为文字线框，尚非可运行 Demo。依据 [PROJECT.md](../oh-my-niumas-project/PROJECT.md) 前部品牌与精简策略；统计规则见 [metrics-spec.md](metrics-spec.md)。
+状态：2026-10-19 设计依据。本文为文字线框，对应四页本地 Demo 已实现，启动方式见 [README](../README.md)。依据 [PROJECT.md](../oh-my-niumas-project/PROJECT.md) 前部品牌与精简策略；统计规则见 [metrics-spec.md](metrics-spec.md)。
 
 ## 已确认范围
 
