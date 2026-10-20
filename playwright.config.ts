@@ -14,8 +14,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command:
-      "PORT=4318 NIUMAS_LOG_ROOT=fixtures/import-smoke NIUMAS_DB_PATH=.local/e2e.sqlite node --import tsx app/server.ts",
+    command: "node --import tsx tests/browser/server.ts",
     url: "http://127.0.0.1:4318/api/analysis",
     reuseExistingServer: false,
   },

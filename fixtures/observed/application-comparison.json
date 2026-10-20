@@ -1,0 +1,406 @@
+{
+  "observedOn": "2026-10-20",
+  "source": "Codex read_thread API versus projected JSONL; not desktop UI",
+  "samples": [
+    {
+      "alias": "R1",
+      "found": true,
+      "versions": [
+        "0.163.0-alpha.10.2"
+      ],
+      "tokens": 182547,
+      "issues": [],
+      "localTurns": 1,
+      "more": false,
+      "turns": [
+        {
+          "alias": "T1",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 26134,
+          "logMs": 25903,
+          "appWallMs": 26000,
+          "startDeltaMs": 240,
+          "endDeltaMs": 143
+        }
+      ]
+    },
+    {
+      "alias": "R2",
+      "found": true,
+      "versions": [
+        "0.163.0-alpha.10.2"
+      ],
+      "tokens": 972256,
+      "issues": [
+        "输入记录晚于执行开始，精确等待未知"
+      ],
+      "localTurns": 5,
+      "more": false,
+      "turns": [
+        {
+          "alias": "T1",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 27985,
+          "logMs": 27987,
+          "appWallMs": 28000,
+          "startDeltaMs": 97,
+          "endDeltaMs": 84
+        },
+        {
+          "alias": "T2",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 60235,
+          "logMs": 60234,
+          "appWallMs": 61000,
+          "startDeltaMs": 825,
+          "endDeltaMs": 59
+        },
+        {
+          "alias": "T3",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 8014,
+          "logMs": 8005,
+          "appWallMs": 8000,
+          "startDeltaMs": 198,
+          "endDeltaMs": 203
+        },
+        {
+          "alias": "T4",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 26193,
+          "logMs": 26184,
+          "appWallMs": 26000,
+          "startDeltaMs": 752,
+          "endDeltaMs": 936
+        },
+        {
+          "alias": "T5",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 18984,
+          "logMs": 18974,
+          "appWallMs": 19000,
+          "startDeltaMs": 572,
+          "endDeltaMs": 546
+        }
+      ]
+    },
+    {
+      "alias": "R3",
+      "found": true,
+      "versions": [
+        "0.162.0-alpha.17.2"
+      ],
+      "tokens": 1010274,
+      "issues": [
+        "输入记录晚于执行开始，精确等待未知"
+      ],
+      "localTurns": 10,
+      "more": false,
+      "turns": [
+        {
+          "alias": "T1",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 4319,
+          "logMs": 4319,
+          "appWallMs": 4000,
+          "startDeltaMs": 472,
+          "endDeltaMs": 791
+        },
+        {
+          "alias": "T2",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 3820,
+          "logMs": 3819,
+          "appWallMs": 4000,
+          "startDeltaMs": 751,
+          "endDeltaMs": 570
+        },
+        {
+          "alias": "T3",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 31464,
+          "logMs": 31450,
+          "appWallMs": 32000,
+          "startDeltaMs": 639,
+          "endDeltaMs": 89
+        },
+        {
+          "alias": "T4",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 5005,
+          "logMs": 5002,
+          "appWallMs": 5000,
+          "startDeltaMs": 614,
+          "endDeltaMs": 616
+        },
+        {
+          "alias": "T5",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 7230,
+          "logMs": 7207,
+          "appWallMs": 7000,
+          "startDeltaMs": 715,
+          "endDeltaMs": 922
+        },
+        {
+          "alias": "T6",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 7155215,
+          "logMs": 178719707,
+          "appWallMs": 178720000,
+          "startDeltaMs": 596,
+          "endDeltaMs": 303
+        },
+        {
+          "alias": "T7",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 24400,
+          "logMs": 707428,
+          "appWallMs": 708000,
+          "startDeltaMs": 637,
+          "endDeltaMs": 65
+        },
+        {
+          "alias": "T8",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 208579,
+          "logMs": 5031287,
+          "appWallMs": 5031000,
+          "startDeltaMs": 45,
+          "endDeltaMs": 332
+        },
+        {
+          "alias": "T9",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 115321,
+          "logMs": 4250174,
+          "appWallMs": 4250000,
+          "startDeltaMs": 324,
+          "endDeltaMs": 498
+        },
+        {
+          "alias": "T10",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 16835,
+          "logMs": 16836,
+          "appWallMs": 17000,
+          "startDeltaMs": 214,
+          "endDeltaMs": 50
+        }
+      ]
+    },
+    {
+      "alias": "R4",
+      "found": true,
+      "versions": [
+        "0.162.0-alpha.17.2"
+      ],
+      "tokens": 39012365,
+      "issues": [
+        "压缩或计数路径分歧：未混加 token_count",
+        "输入记录晚于执行开始，精确等待未知"
+      ],
+      "localTurns": 15,
+      "more": false,
+      "turns": [
+        {
+          "alias": "T1",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 5998,
+          "logMs": 5997,
+          "appWallMs": 6000,
+          "startDeltaMs": 513,
+          "endDeltaMs": 510
+        },
+        {
+          "alias": "T2",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 32802,
+          "logMs": 32797,
+          "appWallMs": 33000,
+          "startDeltaMs": 893,
+          "endDeltaMs": 690
+        },
+        {
+          "alias": "T3",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 696259,
+          "logMs": 696249,
+          "appWallMs": 697000,
+          "startDeltaMs": 855,
+          "endDeltaMs": 104
+        },
+        {
+          "alias": "T4",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 744332,
+          "logMs": 744337,
+          "appWallMs": 744000,
+          "startDeltaMs": 642,
+          "endDeltaMs": 979
+        },
+        {
+          "alias": "T5",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 272882,
+          "logMs": 272877,
+          "appWallMs": 272000,
+          "startDeltaMs": 11,
+          "endDeltaMs": 888
+        },
+        {
+          "alias": "T6",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 383056,
+          "logMs": 383050,
+          "appWallMs": 383000,
+          "startDeltaMs": 796,
+          "endDeltaMs": 846
+        },
+        {
+          "alias": "T7",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 34296,
+          "logMs": 34289,
+          "appWallMs": 34000,
+          "startDeltaMs": 271,
+          "endDeltaMs": 560
+        },
+        {
+          "alias": "T8",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 46518,
+          "logMs": 46503,
+          "appWallMs": 46000,
+          "startDeltaMs": 494,
+          "endDeltaMs": 997
+        },
+        {
+          "alias": "T9",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 18122,
+          "logMs": 18109,
+          "appWallMs": 19000,
+          "startDeltaMs": 955,
+          "endDeltaMs": 64
+        },
+        {
+          "alias": "T10",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 690662,
+          "logMs": 690652,
+          "appWallMs": 691000,
+          "startDeltaMs": 459,
+          "endDeltaMs": 111
+        },
+        {
+          "alias": "T11",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 119671,
+          "logMs": 119615,
+          "appWallMs": 119000,
+          "startDeltaMs": 373,
+          "endDeltaMs": 988
+        },
+        {
+          "alias": "T12",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 527555,
+          "logMs": 527553,
+          "appWallMs": 527000,
+          "startDeltaMs": 234,
+          "endDeltaMs": 787
+        },
+        {
+          "alias": "T13",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 584036,
+          "logMs": 584019,
+          "appWallMs": 584000,
+          "startDeltaMs": 863,
+          "endDeltaMs": 882
+        },
+        {
+          "alias": "T14",
+          "found": true,
+          "appStatus": "completed",
+          "logStatus": "completed",
+          "appMs": 925410,
+          "logMs": 925422,
+          "appWallMs": 926000,
+          "startDeltaMs": 677,
+          "endDeltaMs": 99
+        },
+        {
+          "alias": "T15",
+          "found": true,
+          "appStatus": "interrupted",
+          "logStatus": "aborted",
+          "appMs": 863001,
+          "logMs": 863009,
+          "appWallMs": 863000,
+          "startDeltaMs": 918,
+          "endDeltaMs": 927
+        }
+      ]
+    }
+  ]
+}

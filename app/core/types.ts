@@ -46,6 +46,9 @@ export interface Session {
   name: string;
   projectId: string;
   projectName: string;
+  originalProjectId?: string;
+  originalProjectName?: string;
+  note?: string;
   versions: string[];
   turns: Turn[];
   firstAt: number | null;

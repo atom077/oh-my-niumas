@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { analyze, normalizeSources } from "./core/analysis.ts";
 import { demoSources } from "./core/demo.ts";
 import { createLogStore } from "./importer.ts";
+import { AnnotationError } from "./annotations.ts";
 
 export async function createApp(
   options: { dev?: boolean; logRoot?: string; dbPath?: string } = {},
@@ -42,7 +43,7 @@ export async function createApp(
       return json(403, { error: "仅支持本机访问" });
     try {
       const url = new URL(req.url ?? "/", `http://${host}`);
-      if (url.pathname === "/api/refresh") {
+      if (["/api/refresh", "/api/annotations"].includes(url.pathname)) {
         if (req.method !== "POST")
           return json(405, { error: "请使用 POST 刷新" });
         if (
@@ -51,11 +52,33 @@ export async function createApp(
         )
           return json(403, { error: "来源不被允许" });
         if (
-          !req.headers["content-type"]?.startsWith("application/json") ||
-          Number(req.headers["content-length"] ?? 0) > 1024 ||
+          !/^application\/json(?:\s*;|$)/i.test(
+            req.headers["content-type"] ?? "",
+          ) ||
+          Number(req.headers["content-length"] ?? 0) > 8192 ||
           req.headers["transfer-encoding"]
         )
           return json(400, { error: "请求格式无效" });
+        if (url.pathname === "/api/annotations") {
+          const chunks: Buffer[] = [];
+          let bytes = 0;
+          for await (const chunk of req) {
+            bytes += chunk.length;
+            if (bytes > 8192) return json(400, { error: "请求过长" });
+            chunks.push(chunk);
+          }
+          try {
+            store.annotate(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+          } catch (e) {
+            if (e instanceof AnnotationError || e instanceof SyntaxError)
+              return json(400, {
+                error:
+                  e instanceof AnnotationError ? e.message : "标记格式无效",
+              });
+            throw e;
+          }
+          return json(200, { saved: true });
+        }
         req.resume();
         return json(200, await store.refresh());
       }
@@ -93,6 +116,7 @@ export async function createApp(
           projectOptions: analyze(dataset).projects,
           source,
           importStatus: source === "local" ? store.getStatus() : null,
+          originalProjects: source === "local" ? store.getProjects() : [],
         });
       }
       if (url.pathname.startsWith("/api/"))

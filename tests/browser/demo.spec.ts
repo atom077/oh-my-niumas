@@ -45,6 +45,8 @@ test("四页导航、项目筛选与会话下钻保持一致", async ({ page }) 
 test("本机只读入口可以导入隔离日志并切回合成数据", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "数据来源" }).selectOption("local");
+  await expect(page.getByLabel("自动刷新")).toHaveValue("off");
+  await expect(page.getByLabel("自动刷新")).toBeDisabled();
   await page.getByRole("combobox", { name: "日期范围" }).selectOption("all");
   await page.getByRole("button", { name: "扫描 / 刷新" }).click();
   await expect(page.locator(".import-summary")).toContainText("1 个日志");

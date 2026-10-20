@@ -202,7 +202,7 @@ export function Timeline({
           <button
             key={s.id}
             onClick={() => onSession(s.id)}
-            title={s.name}
+            title={s.note ? `${s.name} · ${s.note}` : s.name}
             style={{ height: 60 }}
           >
             <small>{s.projectName}</small>

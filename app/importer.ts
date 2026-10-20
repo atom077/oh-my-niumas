@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import { dirname, join } from "node:path";
 import { key, normalizeSources } from "./core/analysis.ts";
 import type { Dataset, Source } from "./core/types.ts";
+import { createAnnotations } from "./annotations.ts";
 
 export interface ImportStatus {
   files: number;
@@ -15,6 +16,12 @@ export interface ImportStatus {
   cappedFiles: number;
   updatedAt: string | null;
   issues: string[];
+  durationMs: number;
+  addedFiles: number;
+  changedFiles: number;
+  removedFiles: number;
+  newSessions: number;
+  newTurns: number;
 }
 const MAX_FILE_BYTES = 64 * 1024 * 1024,
   MAX_TOTAL_BYTES = 1024 * 1024 * 1024,
@@ -134,6 +141,7 @@ async function discover(root: string) {
 export async function createLogStore(root: string, dbPath: string) {
   await mkdir(dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
+  const annotations = createAnnotations(db);
   db.exec(
     "CREATE TABLE IF NOT EXISTS source_cache (file_key TEXT PRIMARY KEY, signature TEXT NOT NULL, projection TEXT NOT NULL, skipped INTEGER NOT NULL, capped INTEGER NOT NULL)",
   );
@@ -147,6 +155,12 @@ export async function createLogStore(root: string, dbPath: string) {
     cappedFiles: 0,
     updatedAt: null,
     issues: [],
+    durationMs: 0,
+    addedFiles: 0,
+    changedFiles: 0,
+    removedFiles: 0,
+    newSessions: 0,
+    newTurns: 0,
   };
   let inFlight: Promise<ImportStatus> | null = null;
   const refresh = () => {
@@ -157,9 +171,20 @@ export async function createLogStore(root: string, dbPath: string) {
     return inFlight;
   };
   async function scan(): Promise<ImportStatus> {
+    const started = performance.now();
+    const previousFiles = new Set(
+      db
+        .prepare("SELECT file_key FROM source_cache")
+        .all()
+        .map((row) => String(row.file_key)),
+    );
+    const previousSessions = new Set(dataset.sessions.map((s) => s.id));
+    const previousTurns = new Set(
+      dataset.sessions.flatMap((s) => s.turns.map((t) => `${s.id}:${t.id}`)),
+    );
     const found = await discover(root),
       sources: Source[] = [],
-      seen = new Set<string>();
+      seen = new Set(found.files.map((path) => key(path)));
     const next: ImportStatus = {
       files: found.files.length,
       readFiles: 0,
@@ -167,8 +192,14 @@ export async function createLogStore(root: string, dbPath: string) {
       sessions: 0,
       skippedLines: 0,
       cappedFiles: 0,
-      updatedAt: new Date().toISOString(),
+      updatedAt: null,
       issues: [],
+      durationMs: 0,
+      addedFiles: 0,
+      changedFiles: 0,
+      removedFiles: 0,
+      newSessions: 0,
+      newTurns: 0,
     };
     if (found.symlinks) next.issues.push(`已跳过 ${found.symlinks} 个符号链接`);
     if (found.unreadable)
@@ -176,7 +207,6 @@ export async function createLogStore(root: string, dbPath: string) {
     let budget = MAX_TOTAL_BYTES;
     for (const path of found.files) {
       const fileKey = key(path);
-      seen.add(fileKey);
       try {
         const info = await lstat(path, { bigint: true });
         if (!info.isFile() || info.isSymbolicLink()) continue;
@@ -241,6 +271,8 @@ export async function createLogStore(root: string, dbPath: string) {
         ).run(fileKey, signature, projection, skipped, capped);
         sources.push({ alias: fileKey, text: projection });
         next.readFiles++;
+        if (previousFiles.has(fileKey)) next.changedFiles++;
+        else next.addedFiles++;
         next.skippedLines += skipped;
         next.cappedFiles += capped;
       } catch {
@@ -248,12 +280,22 @@ export async function createLogStore(root: string, dbPath: string) {
       }
     }
     for (const row of db.prepare("SELECT file_key FROM source_cache").all())
-      if (!seen.has(String(row.file_key)))
+      if (!seen.has(String(row.file_key))) {
         db.prepare("DELETE FROM source_cache WHERE file_key=?").run(
           row.file_key,
         );
+        next.removedFiles++;
+      }
     dataset = normalizeSources(sources);
     next.sessions = dataset.sessions.length;
+    next.newSessions = dataset.sessions.filter(
+      (s) => !previousSessions.has(s.id),
+    ).length;
+    next.newTurns = dataset.sessions.reduce(
+      (n, s) =>
+        n + s.turns.filter((t) => !previousTurns.has(`${s.id}:${t.id}`)).length,
+      0,
+    );
     if (next.cappedFiles)
       next.issues.push(
         `${next.cappedFiles} 个日志只读取前 64 MiB 或预算内前缀，覆盖不完整`,
@@ -267,12 +309,16 @@ export async function createLogStore(root: string, dbPath: string) {
       next.issues.push("达到 1000 文件发现上限，覆盖可能不完整");
     if (!found.files.length)
       next.issues.push("未发现本机日志，可继续使用合成演示");
+    next.durationMs = Math.round(performance.now() - started);
+    next.updatedAt = new Date().toISOString();
     status = next;
     return structuredClone(status);
   }
   return {
     refresh,
-    getDataset: () => dataset,
+    getDataset: () => annotations.apply(dataset),
+    getProjects: () => annotations.projects(dataset),
+    annotate: (value: unknown) => annotations.update(value, dataset),
     getStatus: () => structuredClone(status),
     close: () => db.close(),
   };

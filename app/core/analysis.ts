@@ -402,7 +402,7 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
       (s) =>
         (!query.project || s.projectId === query.project) &&
         (!query.search ||
-          s.name
+          `${s.name} ${s.note ?? ""}`
             .toLocaleLowerCase()
             .includes(query.search.toLocaleLowerCase())) &&
         (!query.status || s.turns.some((t) => t.status === query.status)) &&

@@ -1069,6 +1069,81 @@ details li {
 .notice button {
   text-decoration: underline;
 }
+.local-labels {
+  margin: 0 0 24px;
+  padding: 16px;
+  background: #f5f3eb;
+  border: 1px solid #deded5;
+  border-radius: 8px;
+}
+.import-summary {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.refresh-status {
+  width: 100%;
+  line-height: 1.8;
+}
+.local-labels p {
+  font-size: 12px;
+  color: #74786b;
+}
+.label-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid #deded5;
+}
+.label-row small {
+  width: 100%;
+  color: #74786b;
+}
+.label-row form {
+  display: flex;
+  gap: 6px;
+}
+.label-row input,
+.label-row select,
+.session-label input {
+  border: 1px solid #d6d8ca;
+  border-radius: 5px;
+  padding: 8px;
+  background: white;
+}
+.label-row button,
+.session-label button {
+  border: 1px solid #d6d8ca;
+  padding: 8px 12px;
+  border-radius: 5px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.session-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 22px;
+}
+.session-label input {
+  width: min(420px, 65vw);
+}
+.session-label small {
+  width: 100%;
+  color: #74786b;
+}
+.session-note-preview {
+  display: block;
+  max-width: 320px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 6px;
+  color: #74786b;
+}
 .date-controls > span:last-child {
   margin-left: auto;
 }

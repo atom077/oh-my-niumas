@@ -73,6 +73,12 @@ test("HTTP 导入和重复刷新幂等，不改源文件也不返回敏感内容
       });
     const response = await refresh();
     assert.equal(response.status, 200);
+    const scan = await response.json();
+    assert.equal(scan.addedFiles, 1);
+    assert.equal(scan.changedFiles, 0);
+    assert.equal(scan.removedFiles, 0);
+    assert.equal(scan.newTurns, 1);
+    assert.ok(scan.durationMs >= 0);
     const first = await fetch(base + "/api/analysis?source=local").then((r) =>
       r.json(),
     );
@@ -85,6 +91,8 @@ test("HTTP 导入和重复刷新幂等，不改源文件也不返回敏感内容
     );
     assert.deepEqual(second.metrics, first.metrics);
     assert.equal(second.importStatus.cachedFiles, 1);
+    assert.equal(second.importStatus.addedFiles, 0);
+    assert.equal(second.importStatus.newTurns, 0);
     assert.equal(await readFile(input, "utf8"), text);
     for (const secret of [
       "PRIVATE_PROJECT",
@@ -128,6 +136,8 @@ test("HTTP 导入和重复刷新幂等，不改源文件也不返回敏感内容
       (r) => r.json(),
     );
     assert.equal(appended.metrics.workloadMs, 1200000);
+    assert.equal(appended.importStatus.changedFiles, 1);
+    assert.equal(appended.importStatus.newTurns, 1);
     await mkdir(join(dir, "archived_sessions"));
     await copyFile(input, join(dir, "archived_sessions", "copy.jsonl"));
     await refresh();
@@ -144,6 +154,7 @@ test("HTTP 导入和重复刷新幂等，不改源文件也不返回敏感内容
       (r) => r.json(),
     );
     assert.equal(truncated.metrics.workloadMs, 0);
+    assert.equal(truncated.importStatus.removedFiles, 1);
     assert.equal(truncated.sessions.length, 0);
     assert.ok(
       truncated.importStatus.issues.some((s: string) => s.includes("符号链接")),
