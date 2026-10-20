@@ -24,7 +24,7 @@ test("HTTP 导入和重复刷新幂等，不改源文件也不返回敏感内容
       type: "session_meta",
       payload: {
         id: "test-session",
-        cwd: "/Users/PRIVATE_PROJECT",
+        cwd: "/Users/PRIVATE_PROJECT/sample-app",
         instructions: "SECRET_PROMPT",
       },
     },

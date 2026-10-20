@@ -35,7 +35,7 @@ export function createAnnotations(db: DatabaseSync) {
     const available = new Set(names.keys());
     for (const id of available) {
       const target = group(id);
-      if (!names.has(target)) names.set(target, `工地 ${target.slice(0, 6)}`);
+      if (!names.has(target)) names.set(target, "暂无日志的项目");
     }
     return [...names.entries()].map(([id, originalName]) => ({
       id,

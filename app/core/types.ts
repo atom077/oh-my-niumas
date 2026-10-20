@@ -44,6 +44,7 @@ export interface Counter {
 export interface Session {
   id: string;
   name: string;
+  titleSource?: "index" | "missing";
   projectId: string;
   projectName: string;
   originalProjectId?: string;

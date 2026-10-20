@@ -114,7 +114,11 @@ export function normalizeSources(sources: Source[]): Dataset {
         id,
         name: source.demo?.session ?? `会话 ${id.slice(0, 6)}`,
         projectId,
-        projectName: source.demo?.project ?? `工地 ${projectId.slice(0, 6)}`,
+        projectName:
+          source.demo?.project ??
+          (typeof meta.project_name === "string"
+            ? meta.project_name
+            : "未命名项目"),
         versions: [],
         turns: [],
         firstAt: null,

@@ -23,9 +23,9 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
       .getByRole("button", { name: "扫描 / 刷新", exact: true })
       .click();
     await expect(page.locator(".import-summary")).toContainText("2 个日志");
-    await page.getByRole("button", { name: "我的工地", exact: true }).click();
-    await page.getByText("管理本地工地", { exact: true }).click();
-    const names = page.getByLabel("工地别名");
+    await page.getByRole("button", { name: "项目", exact: true }).click();
+    await page.getByText("管理本地项目", { exact: true }).click();
+    const names = page.getByLabel("项目别名");
     await names.nth(0).fill("前端体验");
     await page
       .getByRole("button", { name: "保存别名", exact: true })
@@ -33,12 +33,12 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
       .click();
     await expect(page.getByLabel("项目筛选")).toContainText("前端体验");
     const target = await page
-      .getByLabel("合并到工地")
+      .getByLabel("合并到项目")
       .nth(1)
       .locator("option")
       .nth(1)
       .getAttribute("value");
-    await page.getByLabel("合并到工地").nth(1).selectOption(target!);
+    await page.getByLabel("合并到项目").nth(1).selectOption(target!);
     await page
       .getByRole("button", { name: "合并", exact: true })
       .nth(1)
@@ -56,12 +56,12 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
       .getByRole("button", { name: "扫描 / 刷新", exact: true })
       .click();
     await expect(page.getByLabel("会话备注")).toHaveValue("检查登录回归");
-    await page.getByRole("button", { name: "牛马花名册", exact: true }).click();
+    await page.getByRole("button", { name: "会话", exact: true }).click();
     await page.getByLabel("搜索会话").fill("登录回归");
     await expect(page.locator("tbody tr")).toHaveCount(1);
     await page.getByRole("button", { name: "清除筛选 ↺" }).click();
-    await page.getByRole("button", { name: "我的工地", exact: true }).click();
-    await page.getByText("管理本地工地", { exact: true }).click();
+    await page.getByRole("button", { name: "项目", exact: true }).click();
+    await page.getByText("管理本地项目", { exact: true }).click();
     await page
       .getByRole("button", { name: "恢复原始归属", exact: true })
       .nth(1)

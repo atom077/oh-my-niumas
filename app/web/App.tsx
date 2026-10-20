@@ -18,10 +18,10 @@ type Response = Analysis & {
   originalProjects: OriginalProject[];
 };
 const pages: { id: Page; icon: string; name: string }[] = [
-  { id: "overview", icon: "◫", name: "工地总览" },
-  { id: "projects", icon: "▧", name: "我的工地" },
-  { id: "sessions", icon: "☷", name: "牛马花名册" },
-  { id: "timeline", icon: "≋", name: "牛马考勤" },
+  { id: "overview", icon: "◫", name: "总览" },
+  { id: "projects", icon: "▧", name: "项目" },
+  { id: "sessions", icon: "☷", name: "会话" },
+  { id: "timeline", icon: "≋", name: "时间轴" },
 ];
 const statusText: Record<string, string> = {
   completed: "已完成",
@@ -225,7 +225,7 @@ export function App() {
             <br />
             进度一定我催。
           </strong>
-          <p>一人带队，百马奔腾。</p>
+          <p>多会话并行，统一查看。</p>
           <div className="local-dot">本地优先 · 只读观测</div>
           <small>v0.1 / STOP CODING. START HERDING.</small>
         </div>
@@ -245,18 +245,16 @@ export function App() {
             <div>
               <div className="eyebrow">HUMAN × AI / COLLABORATION</div>
               <h1>
-                {page === "overview"
-                  ? "我的赛博牛马们，今天干了多少活？"
-                  : title.name}
+                {page === "overview" ? "AI 会话协作总览" : title.name}
                 <span className="title-dot">.</span>
               </h1>
               <p>
                 {page === "overview"
                   ? "从一次派活，到多线并行。把每一段协作，看得清清楚楚。"
                   : page === "timeline"
-                    ? "在同一条真实时间轴上，看看大家何时开工、何时收工。"
+                    ? "在同一条时间轴上查看各会话的执行、等待与输入事件。"
                     : page === "projects"
-                      ? "把每个工地的工作量、会话与协作节奏放在一起。"
+                      ? "按项目查看会话、执行工作量和 Token 用量。"
                       : "一次会话，多轮协作。执行多久，跨度多久，分别说清楚。"}
               </p>
             </div>
@@ -331,7 +329,7 @@ export function App() {
                 setSelected("");
               }}
             >
-              <option value="">全部工地</option>
+              <option value="">全部项目</option>
               {(data?.projectOptions ?? data?.projects ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -405,7 +403,7 @@ export function App() {
             </div>
           )}
           {!data ? (
-            <div className="empty">正在查看工地…</div>
+            <div className="empty">正在加载数据…</div>
           ) : (
             <>
               <div className="demo-note">
@@ -413,7 +411,7 @@ export function App() {
                 <span>
                   {source === "demo"
                     ? "这些数字来自可复现的合成 Fixture，并非你的真实使用记录。"
-                    : "仅必要元数据与手动标记；原始对话和目录不进入浏览器。"}
+                    : "显示 Codex 会话标题、项目目录名与手动标记；原始对话和完整路径不进入浏览器。"}
                 </span>
                 <button className="note-right" onClick={reset}>
                   清除筛选 ↺
@@ -482,7 +480,7 @@ export function App() {
                         <span className="section-kicker">
                           01 / LIVE FROM THE SITE
                         </span>
-                        <h2>今天的协作节奏</h2>
+                        <h2>协作时间轴</h2>
                       </div>
                       <button
                         className="text-button"
@@ -495,7 +493,7 @@ export function App() {
                     <Timeline data={data} onSession={openSession} compact />
                   </section>
                   <div className="recent-heading">
-                    <h2>最近收工</h2>
+                    <h2>最近完成的会话</h2>
                     <span>每一次完成，都有迹可循</span>
                   </div>
                   <div className="activity-grid">
@@ -532,7 +530,7 @@ export function App() {
                       <span className="section-kicker">
                         PROJECTS / {data.projects.length} SITES
                       </span>
-                      <h2>每个工地，都有自己的节奏</h2>
+                      <h2>项目分析</h2>
                     </div>
                   </div>
                   {source === "local" && (
@@ -545,12 +543,12 @@ export function App() {
                     <table>
                       <thead>
                         <tr>
-                          <th>工地名称</th>
+                          <th>项目名称</th>
                           <th>会话</th>
                           <th>AI 工作量</th>
                           <th>已知闭合等待</th>
                           <th>已知 Token</th>
-                          <th>去看施工 ↗</th>
+                          <th>会话详情</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -594,7 +592,7 @@ export function App() {
                       <span className="section-kicker">
                         SESSIONS / A CLOSER LOOK
                       </span>
-                      <h2>{session ? session.name : "牛马花名册"}</h2>
+                      <h2>{session ? session.name : "会话"}</h2>
                     </div>
                     {session && (
                       <button
@@ -623,7 +621,7 @@ export function App() {
                           <thead>
                             <tr>
                               <th>会话</th>
-                              <th>工地</th>
+                              <th>项目</th>
                               <th>AI 执行累计</th>
                               <th>会话跨度</th>
                               <th>已知 Token</th>
@@ -678,7 +676,7 @@ export function App() {
                       <span className="section-kicker">
                         TIMELINE / PARALLEL IS NORMAL
                       </span>
-                      <h2>一人带队，百马奔腾。</h2>
+                      <h2>多会话时间轴</h2>
                     </div>
                     <span className="mini-label">
                       峰值 {metrics!.peakParallelism} 路并行
@@ -901,6 +899,10 @@ function SessionDetail({
       <details open={s.issues.length > 0}>
         <summary>数据证据与统计口径</summary>
         <p>
+          {data.source === "local" &&
+            (s.titleSource === "index"
+              ? "会话标题来自 Codex 会话索引。 "
+              : "索引中暂无该会话标题，显示为未命名会话。 ")}
           来源 {data.source === "demo" ? "合成 Fixture" : "本机只读白名单"}；
           {s.turns.reduce((a, t) => a + t.evidence.length, 0)} 条边界证据。Token
           路径：{s.tokenMode}。日志版本：{s.versions.join(" / ") || "未记录"}。

@@ -10,6 +10,8 @@
 | [synthetic/acceptance-vectors.json](synthetic/acceptance-vectors.json) | 完全合成 | 100 min / 50 min / 2.0× 并发样例、裁切、跨日和 Token 子集验收向量 |
 | [import-smoke/sessions/synthetic.jsonl](import-smoke/sessions/synthetic.jsonl) | 完全合成的原始格式 | 浏览器测试专用的隔离导入根，10 分钟 / 100 Token；不读取用户真实日志 |
 
+`import-smoke/session_index.jsonl` 是完全合成的会话标题索引，用于验收标题显示与下钻；不含真实会话标题。
+
 ## 脱敏方式
 
 - 删除真实 session/turn/item/response 标识、机器路径、用户名、模型请求内容、会话标题、Prompt、工具调用及结果。

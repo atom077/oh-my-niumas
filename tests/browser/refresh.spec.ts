@@ -23,7 +23,7 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
       .getByRole("button", { name: "扫描 / 刷新", exact: true })
       .click();
     await expect(page.getByLabel("自动刷新")).toBeEnabled();
-    await page.getByRole("button", { name: "牛马花名册", exact: true }).click();
+    await page.getByRole("button", { name: "会话", exact: true }).click();
     await page.locator(".session-button").first().click();
     await expect(page.locator(".turn")).toHaveCount(1);
     await page.getByLabel("自动刷新").selectOption("15");
@@ -98,7 +98,7 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
     await page.getByLabel("数据来源").selectOption("demo");
     await page.clock.runFor(60000);
     expect(scans).toBe(off);
-    await page.getByRole("button", { name: "工地总览", exact: true }).click();
+    await page.getByRole("button", { name: "总览", exact: true }).click();
     await expect(page.locator(".metric strong").first()).toHaveText("100 min");
   } finally {
     await writeFile(input, original);

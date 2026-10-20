@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { key, normalizeSources } from "./core/analysis.ts";
 import type { Dataset, Source } from "./core/types.ts";
 import { createAnnotations } from "./annotations.ts";
+import { projectDirectoryName, readSessionTitles } from "./display-names.ts";
 
 export interface ImportStatus {
   files: number;
@@ -59,6 +60,7 @@ function projectLine(raw: string): string {
     payload = {
       id: safeId(p.id),
       cwd: safeId(p.cwd),
+      project_name: projectDirectoryName(p.cwd),
       forked_from_id: safeId(p.forked_from_id),
       parent_thread_id: safeId(p.parent_thread_id),
     };
@@ -210,7 +212,7 @@ export async function createLogStore(root: string, dbPath: string) {
       try {
         const info = await lstat(path, { bigint: true });
         if (!info.isFile() || info.isSymbolicLink()) continue;
-        const signature = `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}:v2`;
+        const signature = `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}:v3`;
         const cached = db
           .prepare(
             "SELECT signature,projection,skipped,capped FROM source_cache WHERE file_key=?",
@@ -287,6 +289,20 @@ export async function createLogStore(root: string, dbPath: string) {
         next.removedFiles++;
       }
     dataset = normalizeSources(sources);
+    const titles = await readSessionTitles(root);
+    next.issues.push(...titles.issues);
+    for (const session of dataset.sessions) {
+      const name = titles.names.get(session.id)?.title;
+      session.name = name ?? "未命名会话";
+      session.titleSource = name ? "index" : "missing";
+    }
+    const missingTitles = dataset.sessions.filter(
+      (s) => s.titleSource === "missing",
+    ).length;
+    if (missingTitles)
+      next.issues.push(
+        `${missingTitles} 个会话没有可匹配的 Codex 标题，显示为未命名会话`,
+      );
     next.sessions = dataset.sessions.length;
     next.newSessions = dataset.sessions.filter(
       (s) => !previousSessions.has(s.id),

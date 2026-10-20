@@ -7,8 +7,8 @@ export function demoSources(scenario = "parallel"): Source[] {
     {
       id: "demo-a",
       cwd: "/synthetic/web",
-      project: "牧场前端",
-      session: "牛马 A · 登录体验打磨",
+      project: "前端应用",
+      session: "会话 A · 登录体验打磨",
       turns: [
         [0, 18],
         [25, 47],
@@ -17,15 +17,15 @@ export function demoSources(scenario = "parallel"): Source[] {
     {
       id: "demo-b",
       cwd: "/synthetic/web",
-      project: "牧场前端",
-      session: "牛马 B · 组件测试补齐",
+      project: "前端应用",
+      session: "会话 B · 组件测试补齐",
       turns: [[10, 45]],
     },
     {
       id: "demo-c",
       cwd: "/synthetic/data",
-      project: "数据工坊",
-      session: "牛马 C · 清洗脚本优化",
+      project: "数据服务",
+      session: "会话 C · 清洗脚本优化",
       turns: [[25, 50]],
     },
   ];
@@ -100,28 +100,28 @@ function boundarySources(): Source[] {
   const definitions = [
     {
       id: "cross",
-      name: "牛马 D · 跨午夜收工",
+      name: "会话 D · 跨午夜执行",
       start: "2026-10-18T23:50:00+08:00",
       end: "2026-10-19T00:20:00+08:00",
       kind: "task_complete",
     },
     {
       id: "abort",
-      name: "牛马 E · 已中止",
+      name: "会话 E · 已中止",
       start: "2026-10-19T00:03:00+08:00",
       end: "2026-10-19T00:08:00+08:00",
       kind: "turn_aborted",
     },
     {
       id: "unknown",
-      name: "牛马 F · 缺失结束",
+      name: "会话 F · 缺失结束",
       start: "2026-10-19T00:05:00+08:00",
       end: null,
       kind: null,
     },
     {
       id: "failed",
-      name: "牛马 G · 明确失败（合成）",
+      name: "会话 G · 明确失败（合成）",
       start: "2026-10-19T00:06:00+08:00",
       end: "2026-10-19T00:09:00+08:00",
       kind: "task_failed",
@@ -182,7 +182,7 @@ function boundarySources(): Source[] {
     ...base,
     counter(
       "reset",
-      "牛马 H · Token 重报与重置",
+      "会话 H · Token 重报与重置",
       [0, 100, 150, 150, 20, 40].map((total, i) => ({
         timestamp: new Date(
           Date.parse("2026-10-19T00:02:00+08:00") + i * 60_000,
@@ -194,7 +194,7 @@ function boundarySources(): Source[] {
         },
       })),
     ),
-    counter("compact", "牛马 I · 压缩计数分歧", [
+    counter("compact", "会话 I · 压缩计数分歧", [
       {
         timestamp: "2026-10-19T00:05:00+08:00",
         type: "token_usage_record",

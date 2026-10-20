@@ -33,9 +33,9 @@ export function ProjectLabels({
   }
   return (
     <details className="local-labels">
-      <summary>管理本地工地</summary>
+      <summary>管理本地项目</summary>
       <p>
-        为匿名目录添加别名，或将相关目录合并统计。恢复只改变本地分组，日志不会修改。恢复组首目录时会拆开整组。
+        为项目目录添加别名，或将相关目录合并统计。恢复只改变本地分组，日志不会修改。恢复组首目录时会拆开整组。
       </p>
       {projects.map((p) => (
         <div className="label-row" key={p.id}>
@@ -56,7 +56,7 @@ export function ProjectLabels({
             <input
               key={p.name}
               name="name"
-              aria-label="工地别名"
+              aria-label="项目别名"
               defaultValue={p.name === p.originalName ? "" : p.name}
               placeholder={p.originalName}
               maxLength={80}
@@ -72,7 +72,7 @@ export function ProjectLabels({
               if (to) void submit({ action: "mergeProjects", from: p.id, to });
             }}
           >
-            <select name="target" aria-label="合并到工地" defaultValue="">
+            <select name="target" aria-label="合并到项目" defaultValue="">
               <option value="">合并到…</option>
               {projects
                 .filter((t) => t.groupId === t.id && t.groupId !== p.groupId)

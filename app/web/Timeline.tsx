@@ -191,8 +191,8 @@ export function Timeline({
     return (
       <div className="empty">
         <span>☁</span>
-        <h3>这片工地暂时很安静</h3>
-        <p>换个日期或清除筛选，看看牛马们的施工记录。</p>
+        <h3>没有符合筛选的会话</h3>
+        <p>调整日期或清除筛选，查看会话活动记录。</p>
       </div>
     );
   return (
