@@ -27,13 +27,13 @@ test("四页导航、项目筛选与会话下钻保持一致", async ({ page }) 
   });
   await page.getByRole("button", { name: "时间轴", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "多会话时间轴" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("img", { name: /多会话协作时间轴/ }),
+    page.getByRole("heading", { name: "项目活动概览" }),
   ).toBeVisible();
   await page.getByRole("combobox", { name: "项目筛选" }).selectOption("");
-  await expect(page.locator(".fixed-names .lane-name")).toHaveCount(3);
+  await expect(page.locator(".density-row")).toHaveCount(2);
+  await page.getByRole("button", { name: "小时分段", exact: true }).click();
+  await expect(page.locator(".hour-session-row")).toHaveCount(3);
+  await page.getByRole("button", { name: "全天概览", exact: true }).click();
   await page.screenshot({
     path: "docs/screenshots/timeline.png",
     fullPage: true,
@@ -52,8 +52,7 @@ test("本机只读入口可以导入隔离日志并切回合成数据", async ({
   await expect(page.locator(".import-summary")).toContainText("1 个日志");
   await expect(page.locator(".metric strong").first()).toHaveText("10 min");
   await expect(page.locator(".metric strong").nth(3)).toHaveText("100");
-  await expect(page.locator(".fixed-names")).toContainText("验证日志导入");
-  await expect(page.locator(".fixed-names")).toContainText("http-demo");
+  await expect(page.locator(".density-matrix")).toContainText("http-demo");
   await page.getByRole("button", { name: "会话", exact: true }).click();
   await page
     .getByRole("button", { name: "验证日志导入 ↗", exact: true })

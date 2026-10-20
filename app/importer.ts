@@ -7,8 +7,15 @@ import { key, normalizeSources } from "./core/analysis.ts";
 import type { Dataset, Source } from "./core/types.ts";
 import { createAnnotations } from "./annotations.ts";
 import { projectDirectoryName, readSessionTitles } from "./display-names.ts";
+import {
+  normalizeCursor,
+  scanCursor,
+  type CursorStatus,
+} from "./cursor-importer.ts";
 
 export interface ImportStatus {
+  providers?: { codex: number; cursor: number };
+  cursor?: CursorStatus;
   files: number;
   readFiles: number;
   cachedFiles: number;
@@ -140,13 +147,30 @@ async function discover(root: string) {
   return { files: files.sort(), symlinks, unreadable };
 }
 
-export async function createLogStore(root: string, dbPath: string) {
+export async function createLogStore(
+  root: string,
+  dbPath: string,
+  cursorRoot?: string,
+) {
   await mkdir(dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
   const annotations = createAnnotations(db);
   db.exec(
     "CREATE TABLE IF NOT EXISTS source_cache (file_key TEXT PRIMARY KEY, signature TEXT NOT NULL, projection TEXT NOT NULL, skipped INTEGER NOT NULL, capped INTEGER NOT NULL)",
   );
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS cursor_cache (root_key TEXT PRIMARY KEY, projection TEXT NOT NULL)",
+  );
+  const cachedCursor = (): Dataset => {
+    const row =
+      cursorRoot &&
+      db
+        .prepare("SELECT projection FROM cursor_cache WHERE root_key=?")
+        .get(key(cursorRoot));
+    return row
+      ? normalizeCursor(JSON.parse(String(row.projection)))
+      : { sessions: [], issues: [] };
+  };
   let dataset: Dataset = { sessions: [], issues: [] };
   let status: ImportStatus = {
     files: 0,
@@ -193,6 +217,8 @@ export async function createLogStore(root: string, dbPath: string) {
                 text: String(row.projection),
               })),
           );
+    if (!dataset.sessions.length)
+      baseline.sessions.push(...cachedCursor().sessions);
     const previousSessions = new Set(baseline.sessions.map((s) => s.id));
     const previousTurns = new Set(
       baseline.sessions.flatMap((s) => s.turns.map((t) => `${s.id}:${t.id}`)),
@@ -316,6 +342,30 @@ export async function createLogStore(root: string, dbPath: string) {
       next.issues.push(
         `${missingTitles} 个会话没有可匹配的 Codex 标题，显示为未命名会话`,
       );
+    if (cursorRoot) {
+      const cursor = await scanCursor(cursorRoot);
+      if (cursor.projections !== null) {
+        db.prepare("INSERT OR REPLACE INTO cursor_cache VALUES (?,?)").run(
+          key(cursorRoot),
+          JSON.stringify(cursor.projections),
+        );
+      }
+      const cursorData = cachedCursor();
+      for (const session of cursorData.sessions) {
+        const title = cursor.titles.get(session.id);
+        if (title) {
+          session.name = title;
+          session.titleSource = "cursor";
+        }
+      }
+      dataset.sessions.push(...cursorData.sessions);
+      next.cursor = { ...cursor.status, sessions: cursorData.sessions.length };
+      next.issues.push(...cursor.status.issues);
+    }
+    next.providers = {
+      codex: dataset.sessions.filter((s) => s.provider !== "cursor").length,
+      cursor: dataset.sessions.filter((s) => s.provider === "cursor").length,
+    };
     next.sessions = dataset.sessions.length;
     next.newSessions = dataset.sessions.filter(
       (s) => !previousSessions.has(s.id),
@@ -336,7 +386,7 @@ export async function createLogStore(root: string, dbPath: string) {
       next.issues.push(`${noTiming} 个会话缺少可用时间证据，未进入时间轴`);
     if (found.files.length >= MAX_FILES)
       next.issues.push("达到 1000 文件发现上限，覆盖可能不完整");
-    if (!found.files.length)
+    if (!dataset.sessions.length)
       next.issues.push("未发现本机日志，可继续使用合成演示");
     next.durationMs = Math.round(performance.now() - started);
     next.updatedAt = new Date().toISOString();
@@ -353,12 +403,16 @@ export async function createLogStore(root: string, dbPath: string) {
     availability: () => {
       const lastAt = dataset.sessions.reduce<number | null>(
         (max, s) =>
-          s.lastAt !== null && (max === null || s.lastAt > max) ? s.lastAt : max,
+          s.lastAt !== null && (max === null || s.lastAt > max)
+            ? s.lastAt
+            : max,
         null,
       );
       return {
         ready: status.updatedAt !== null && dataset.sessions.length > 0,
-        cached: Boolean(db.prepare("SELECT 1 FROM source_cache LIMIT 1").get()),
+        cached:
+          Boolean(db.prepare("SELECT 1 FROM source_cache LIMIT 1").get()) ||
+          cachedCursor().sessions.length > 0,
         sessions: dataset.sessions.length,
         lastAt,
       };

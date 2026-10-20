@@ -9,11 +9,20 @@ import { createLogStore } from "./importer.ts";
 import { AnnotationError } from "./annotations.ts";
 
 export async function createApp(
-  options: { dev?: boolean; logRoot?: string; dbPath?: string } = {},
+  options: {
+    dev?: boolean;
+    logRoot?: string;
+    cursorRoot?: string;
+    dbPath?: string;
+  } = {},
 ) {
   const store = await createLogStore(
     options.logRoot ?? join(homedir(), ".codex"),
     options.dbPath ?? resolve(".local/niumas.sqlite"),
+    options.cursorRoot ??
+      (options.logRoot
+        ? undefined
+        : join(homedir(), "Library/Application Support/Cursor/User")),
   );
   const vite = options.dev
     ? await (
@@ -103,6 +112,9 @@ export async function createApp(
           (from !== undefined && to !== undefined && to <= from)
         )
           return json(400, { error: "时间范围无效" });
+        const provider = url.searchParams.get("provider") || undefined;
+        if (provider && !["codex", "cursor"].includes(provider))
+          return json(400, { error: "会话来源无效" });
         const dataset =
           source === "local"
             ? store.getDataset()
@@ -110,6 +122,7 @@ export async function createApp(
                 demoSources(url.searchParams.get("scenario") ?? undefined),
               );
         const data = analyze(dataset, {
+          provider,
           from,
           to,
           project: url.searchParams.get("project") ?? undefined,
@@ -118,7 +131,7 @@ export async function createApp(
         });
         return json(200, {
           ...data,
-          projectOptions: analyze(dataset).projects,
+          projectOptions: analyze(dataset, { provider }).projects,
           source,
           importStatus: source === "local" ? store.getStatus() : null,
           originalProjects: source === "local" ? store.getProjects() : [],
@@ -177,6 +190,7 @@ if (
   const server = await createApp({
     dev: process.env.NIUMAS_DEV === "1",
     logRoot: process.env.NIUMAS_LOG_ROOT,
+    cursorRoot: process.env.NIUMAS_CURSOR_ROOT,
     dbPath: process.env.NIUMAS_DB_PATH,
   });
   server.listen(Number(process.env.PORT ?? 4317), "127.0.0.1", () =>

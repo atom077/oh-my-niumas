@@ -14,6 +14,7 @@ import {
   containsActivity,
   viewTime,
   placeItems,
+  stairTurns,
   timelineRows,
   type PlacedItem,
   type TimeWindow,
@@ -40,17 +41,17 @@ const axisTime = (v: number, view: TimeWindow) => {
   return day(view.from) !== day(view.to)
     ? viewTime(v, precise)
     : precise
-      ? viewTime(v, true).slice(6)
-      : time(v);
+    ? viewTime(v, true).slice(6)
+    : time(v);
 };
 export const duration = (v: number | null) =>
   v === null
     ? "N/A"
     : v >= 7_200_000
-      ? `${(v / 3_600_000).toFixed(1)} h`
-      : v >= 60_000
-        ? `${Number((v / 60_000).toFixed(1))} min`
-        : `${(v / 1000).toFixed(1)} s`;
+    ? `${(v / 3_600_000).toFixed(1)} h`
+    : v >= 60_000
+    ? `${Number((v / 60_000).toFixed(1))} min`
+    : `${(v / 1000).toFixed(1)} s`;
 export const tokens = (v: number | null) =>
   v === null ? "N/A" : new Intl.NumberFormat("en-US").format(v);
 
@@ -193,11 +194,27 @@ export function Timeline({
   handlers.current = { onSession, onViewChange, full: data.window };
   const hasSessions = data.sessions.length > 0;
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const rows = useMemo(() => timelineRows(data, expanded), [data, expanded]);
+  const [expandedProjects, setExpandedProjects] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const toggleProject = (id: string) =>
+    setExpandedProjects((v) => {
+      const next = new Set(v);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  const projectClick = useRef(toggleProject);
+  projectClick.current = toggleProject;
+  const rows = useMemo(
+    () => timelineRows(data, expanded, expandedProjects),
+    [data, expanded, expandedProjects],
+  );
   const height = rows.reduce((sum, r) => sum + r.height, 0);
-  const stairable = rows.filter((r) => (r.turnCount ?? 0) > 1);
+  const stairable = data.sessions.filter((s) => stairTurns(data, s).length > 1);
   const allOpen =
-    stairable.length > 0 && stairable.every((r) => expanded.has(r.sessionId));
+    stairable.length > 0 &&
+    stairable.every((s) => expanded.has(s.id)) &&
+    data.projects.every((p) => expandedProjects.has(p.id));
   const toggle = (id: string) =>
     setExpanded((v) => {
       const next = new Set(v);
@@ -209,6 +226,11 @@ export function Timeline({
     const chart = echarts.init(host.current);
     chartRef.current = chart;
     chart.on("click", (p) => {
+      const projectId = (p.data as { projectId?: string })?.projectId;
+      if (projectId) {
+        projectClick.current(projectId);
+        return;
+      }
       const id = (p.data as { sessionId?: string })?.sessionId;
       if (id) handlers.current.onSession(id);
     });
@@ -256,14 +278,39 @@ export function Timeline({
         formatter: (p: unknown) => {
           const item = (p as { data: PlacedItem }).data,
             v = item.value;
-          const head = `<b>${item.label}</b><br/>`;
+          const safeLabel = item.label.replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              }[c]!),
+          );
+          const head = `<b>${safeLabel}</b><br/>`;
+          if (item.projectId)
+            return `${head}${time(v[1])}${
+              v[1] !== v[2] ? ` — ${time(v[2])}` : ""
+            }<br/>${
+              v[3] === 0
+                ? "项目 AI 活跃覆盖（区间并集）"
+                : v[3] === 1
+                ? "闭合等待（已扣除执行覆盖）"
+                : v[3] === 3
+                ? "用户输入"
+                : "未知边界"
+            }<br/>点击展开项目会话`;
           return v[3] === 4
             ? `${head}${time(v[1])} 开始下一轮`
             : v[3] === 2
-              ? `${head}${time(v[1])} · 边界未知或冲突<br/>未计入精确执行时长`
-              : v[3] === 3
-                ? `${head}${time(v[1])} · 输入观测事件`
-                : `${head}${time(v[1])} — ${time(v[2])}<br/>${v[3] === 1 ? "闭合等待" : "AI 执行"} ${duration(v[2] - v[1])}<br/>点击查看会话`;
+            ? `${head}${time(v[1])} · 边界未知或冲突<br/>未计入精确执行时长`
+            : v[3] === 3
+            ? `${head}${time(v[1])} · 输入观测事件`
+            : `${head}${time(v[1])} — ${time(v[2])}<br/>${
+                v[3] === 1 ? "闭合等待" : "AI 执行"
+              } ${duration(v[2] - v[1])}<br/>点击查看会话`;
         },
       },
       xAxis: {
@@ -342,18 +389,36 @@ export function Timeline({
     <>
       <div className="timeline-toolbar">
         <Legend />
-        {stairable.length > 0 && (
+        <div className="timeline-expansion">
           <button
             className="ghost-button"
             onClick={() =>
-              setExpanded(
-                allOpen ? new Set() : new Set(stairable.map((r) => r.sessionId)),
+              setExpandedProjects(
+                data.projects.every((p) => expandedProjects.has(p.id))
+                  ? new Set()
+                  : new Set(data.projects.map((p) => p.id)),
               )
             }
           >
-            {allOpen ? "收起全部轮次" : "展开全部轮次"}
+            {data.projects.every((p) => expandedProjects.has(p.id))
+              ? "收起全部项目"
+              : "展开全部项目"}
           </button>
-        )}
+          {stairable.length > 0 && (
+            <button
+              className="ghost-button"
+              onClick={() => {
+                setExpanded(
+                  allOpen ? new Set() : new Set(stairable.map((s) => s.id)),
+                );
+                if (!allOpen)
+                  setExpandedProjects(new Set(data.projects.map((p) => p.id)));
+              }}
+            >
+              {allOpen ? "收起全部轮次" : "展开全部轮次"}
+            </button>
+          )}
+        </div>
       </div>
       {!containsActivity(data, view, showWait) && (
         <p className="viewport-empty">当前显示范围没有活动</p>
@@ -361,6 +426,44 @@ export function Timeline({
       <div className="timeline-frame">
         <div className="fixed-names" style={{ paddingTop: GRID.top }}>
           {rows.map((r) => {
+            if (r.kind === "project") {
+              const p = data.projects.find((p) => p.id === r.projectId)!;
+              const ss = data.sessions.filter((s) => s.projectId === p.id);
+              const providers = [
+                ...new Set(
+                  ss.map((s) => (s.provider === "cursor" ? "Cursor" : "Codex")),
+                ),
+              ].join(" + ");
+              const open = expandedProjects.has(p.id);
+              return (
+                <div
+                  key={r.key}
+                  className={"lane project-lane" + (open ? " open" : "")}
+                  style={{ height: r.height }}
+                >
+                  <button
+                    className="project-toggle lane-toggle"
+                    aria-expanded={open}
+                    aria-label={`${open ? "收起" : "展开"}项目「${p.name}」的 ${
+                      ss.length
+                    } 个会话`}
+                    onClick={() => toggleProject(p.id)}
+                  >
+                    <span aria-hidden="true">›</span>
+                  </button>
+                  <button
+                    className="lane-name project-name"
+                    onClick={() => toggleProject(p.id)}
+                    title={p.name}
+                  >
+                    <strong>{p.name}</strong>
+                    <small>
+                      {ss.length} 个会话 · {providers}
+                    </small>
+                  </button>
+                </div>
+              );
+            }
             const s = data.sessions.find((v) => v.id === r.sessionId)!;
             if (r.turnId) {
               const t = s.turns.find((v) => v.id === r.turnId)!;
@@ -386,14 +489,18 @@ export function Timeline({
             return (
               <div
                 key={r.key}
-                className={open ? "lane session-lane open" : "lane session-lane"}
+                className={
+                  open ? "lane session-lane open" : "lane session-lane"
+                }
                 style={{ height: r.height }}
               >
                 {(r.turnCount ?? 0) > 1 ? (
                   <button
-                    className="lane-toggle"
+                    className="lane-toggle session-toggle"
                     aria-expanded={open}
-                    aria-label={`${open ? "收起" : "展开"}「${s.name}」的 ${r.turnCount} 轮`}
+                    aria-label={`${open ? "收起" : "展开"}「${s.name}」的 ${
+                      r.turnCount
+                    } 轮`}
                     title={`${open ? "收起" : "展开"} ${r.turnCount} 轮`}
                     onClick={() => toggle(s.id)}
                   >
@@ -407,7 +514,10 @@ export function Timeline({
                   onClick={() => onSession(s.id)}
                   title={s.note ? `${s.name} · ${s.note}` : s.name}
                 >
-                  <small>{s.projectName}</small>
+                  <small>
+                    {s.projectName} ·{" "}
+                    {s.provider === "cursor" ? "Cursor" : "Codex"}
+                  </small>
                   {s.name}
                 </button>
               </div>

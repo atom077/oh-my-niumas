@@ -84,7 +84,7 @@ test("扫描过本机日志后，默认打开本机数据", async ({ page }) => 
   await page.goto("/");
   await expect(page.getByLabel("数据来源")).toHaveValue("local");
   await expect(page.locator(".source-pill")).toHaveText("本机只读");
-  await expect(page.locator(".fixed-names")).toContainText("验证日志导入");
+  await expect(page.locator(".density-matrix")).toContainText("http-demo");
   await expect(page.locator(".metric strong").first()).toHaveText("10 min");
   await page.getByLabel("数据来源").selectOption("demo");
   await expect(page.locator(".metric strong").first()).toHaveText("100 min");

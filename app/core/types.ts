@@ -17,6 +17,10 @@ export interface Turn {
   evidence: Evidence[];
   tokens: number | null;
   conflict?: boolean;
+  /** Cursor's recorded duration has no verified absolute terminal boundary. */
+  reportedDurationMs?: number;
+  /** Activity timestamp without a verified execution boundary. */
+  observedAt?: number | null;
 }
 export interface Usage {
   id: string;
@@ -44,7 +48,9 @@ export interface Counter {
 export interface Session {
   id: string;
   name: string;
-  titleSource?: "index" | "missing";
+  provider?: "codex" | "cursor";
+  activityTimes?: number[];
+  titleSource?: "index" | "cursor" | "missing";
   projectId: string;
   projectName: string;
   originalProjectId?: string;
@@ -64,6 +70,9 @@ export interface Session {
   recordSeen: boolean;
   conflictedUsageIds: string[];
   workloadMs: number;
+  reportedWorkloadMs?: number | null;
+  reportedTurns?: number;
+  reportedTurnTotal?: number;
   spanMs: number | null;
   waitingMs: number | null;
   openWaiting: boolean;
@@ -73,6 +82,7 @@ export interface Dataset {
   issues: string[];
 }
 export interface Query {
+  provider?: string;
   from?: number;
   to?: number;
   project?: string;
@@ -81,6 +91,9 @@ export interface Query {
 }
 export interface Metrics {
   workloadMs: number;
+  reportedWorkloadMs: number | null;
+  reportedTurns: number;
+  reportedTurnTotal: number;
   coverageMs: number;
   averageParallelism: number | null;
   peakParallelism: number;
@@ -88,6 +101,7 @@ export interface Metrics {
   waitingMs: number | null;
   closedTurns: number;
   startedTurns: number;
+  observedTurns: number;
   tokenSessions: number;
   inputCount: number;
 }
@@ -105,6 +119,9 @@ export interface Project {
   name: string;
   sessionCount: number;
   workloadMs: number;
+  reportedWorkloadMs: number | null;
+  reportedTurns: number;
+  reportedTurnTotal: number;
   tokens: number | null;
   waitingMs: number | null;
 }

@@ -4,7 +4,7 @@ import { basename, win32, join } from "node:path";
 import { key } from "./core/analysis.ts";
 
 // Titles are explicit index metadata, never reconstructed from message content.
-function titleText(value: unknown): string {
+export function titleText(value: unknown): string {
   if (typeof value !== "string") return "";
   return value
     .replace(/[／＼]/g, (c) => (c === "／" ? "/" : "\\"))

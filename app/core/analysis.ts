@@ -112,6 +112,7 @@ export function normalizeSources(sources: Source[]): Dataset {
     if (!s) {
       s = {
         id,
+        provider: "codex",
         name: source.demo?.session ?? `会话 ${id.slice(0, 6)}`,
         projectId,
         projectName:
@@ -259,8 +260,8 @@ export function normalizeSources(sources: Source[]): Dataset {
           p.type === "turn_aborted"
             ? "aborted"
             : isFailure
-              ? "failed"
-              : "completed";
+            ? "failed"
+            : "completed";
         if (
           turn.end !== null &&
           (turn.end !== at ||
@@ -316,8 +317,8 @@ export function normalizeSources(sources: Source[]): Dataset {
     s.tokenMode = s.usage.length
       ? "record"
       : !s.recordSeen && s.counters.length > 1
-        ? "counter"
-        : "unknown";
+      ? "counter"
+      : "unknown";
     s.tokenComplete =
       s.usage.length > 0 &&
       s.usage[0].threadTotal === s.usage[0].tokens &&
@@ -382,10 +383,12 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
   const overlaps = (start: number | null, end: number | null) =>
     start !== null && end !== null && start < window.to && end > window.from;
   const hasActivity = (s: Session) =>
+    s.activityTimes?.some(inWindow) ||
     s.turns.some(
       (t) =>
         inWindow(t.start) ||
         inWindow(t.end) ||
+        inWindow(t.observedAt ?? null) ||
         (t.status !== "unknown" && overlaps(t.start, t.end)),
     ) ||
     s.inputs.some((i) => inWindow(i.at)) ||
@@ -404,6 +407,7 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
   const sessions = structuredClone(
     dataset.sessions.filter(
       (s) =>
+        (!query.provider || (s.provider ?? "codex") === query.provider) &&
         (!query.project || s.projectId === query.project) &&
         (!query.search ||
           `${s.name} ${s.note ?? ""}`
@@ -420,12 +424,22 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
   });
   for (const s of sessions) {
     s.workloadMs = 0;
-    s.waitingMs = 0;
+    s.waitingMs = s.provider === "cursor" ? null : 0;
     s.openWaiting = false;
+    const reportedTurns = s.turns.filter((t) => inWindow(t.observedAt ?? null));
+    const withDuration = reportedTurns.filter(
+      (t) => t.reportedDurationMs !== undefined,
+    );
+    s.reportedTurns = withDuration.length;
+    s.reportedTurnTotal = reportedTurns.length;
+    s.reportedWorkloadMs = withDuration.length
+      ? withDuration.reduce((n, t) => n + t.reportedDurationMs!, 0)
+      : null;
     const activityPoints = s.turns
       .flatMap((t) => [t.start, t.end])
       .filter((at): at is number => inWindow(at))
       .concat(
+        (s.activityTimes ?? []).filter(inWindow),
         s.inputs.map((i) => i.at).filter(inWindow),
         s.usage.map((u) => u.at).filter(inWindow),
         s.counters.map((c) => c.at).filter(inWindow),
@@ -547,6 +561,13 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
     ss.some((s) => s.waitingMs !== null)
       ? ss.reduce((n, s) => n + (s.waitingMs ?? 0), 0)
       : null;
+  const reportedSummary = (ss: Session[]) => ({
+    reportedWorkloadMs: ss.some((s) => s.reportedWorkloadMs != null)
+      ? ss.reduce((n, s) => n + (s.reportedWorkloadMs ?? 0), 0)
+      : null,
+    reportedTurns: ss.reduce((n, s) => n + (s.reportedTurns ?? 0), 0),
+    reportedTurnTotal: ss.reduce((n, s) => n + (s.reportedTurnTotal ?? 0), 0),
+  });
   const projects = [...new Set(sessions.map((s) => s.projectId))].map((id) => {
     const ss = sessions.filter((s) => s.projectId === id);
     return {
@@ -554,6 +575,7 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
       name: ss[0].projectName,
       sessionCount: ss.length,
       workloadMs: ss.reduce((a, s) => a + s.workloadMs, 0),
+      ...reportedSummary(ss),
       tokens: sumTokens(ss),
       waitingMs: sumWait(ss),
     };
@@ -563,8 +585,8 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
     .flatMap((s) => s.turns)
     .filter(
       (t) =>
-        (t.start ?? t.end ?? Infinity) < window.to &&
-        (t.end ?? t.start ?? -Infinity) >= window.from,
+        (t.start ?? t.end ?? t.observedAt ?? Infinity) < window.to &&
+        (t.end ?? t.start ?? t.observedAt ?? -Infinity) >= window.from,
     );
   return {
     sessions,
@@ -572,6 +594,7 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
     intervals,
     metrics: {
       workloadMs,
+      ...reportedSummary(sessions),
       coverageMs,
       averageParallelism: coverageMs ? workloadMs / coverageMs : null,
       peakParallelism,
@@ -581,6 +604,7 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
         (t) => t.start !== null && t.end !== null && t.status !== "unknown",
       ).length,
       startedTurns: turns.filter((t) => t.start !== null).length,
+      observedTurns: turns.length,
       tokenSessions: sessions.filter((s) => s.tokens !== null).length,
       inputCount: sessions
         .flatMap((s) => s.inputs)
@@ -598,8 +622,8 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
         sumTokens(sessions) === null
           ? "unknown"
           : sessions.some((s) => s.tokenMode === "counter")
-            ? "inferred"
-            : "observed",
+          ? "inferred"
+          : "observed",
       waiting: sumWait(sessions) === null ? "unknown" : "observed",
     },
     provenance: {

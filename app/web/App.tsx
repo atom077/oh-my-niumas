@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Analysis, Session } from "../core/types";
-import { Timeline, Concurrency, duration, time, tokens } from "./Timeline";
+import { duration, time, tokens } from "./Timeline";
 import {
   ProjectLabels,
   SessionNote,
   type OriginalProject,
   type SaveLabel,
 } from "./LocalLabels";
-import { TimelineControls } from "./TimelineControls";
-import { resolveView, type ViewChoice } from "./timeline-window";
+import {
+  CollaborationTimeline,
+  type TimelineState,
+} from "./CollaborationTimeline";
+import { AdvancedTimeline } from "./AdvancedTimeline";
 import { useLocalRefresh } from "./useLocalRefresh";
 import type { ImportStatus } from "../importer";
 
@@ -86,6 +89,7 @@ export function App() {
   const [source, setSource] = useState<Source | null>(() =>
     pinnedSource() === "demo" ? "demo" : null,
   );
+  const [provider, setProvider] = useState("");
   const [scenario, setScenario] = useState("parallel"),
     [range, setRange] = useState("all"),
     [status, setStatus] = useState("");
@@ -109,8 +113,9 @@ export function App() {
     onUpdated,
     cancelAnalysis,
   );
-  const [showWait, setShowWait] = useState(true),
-    [collapsed, setCollapsed] = useState<string[]>([]);
+  const [timelineState, setTimelineState] = useState<TimelineState>({
+    mode: "daily",
+  });
   useEffect(() => {
     if (source !== null) return;
     let cancelled = false;
@@ -147,6 +152,7 @@ export function App() {
     const params = new URLSearchParams({
       source,
       scenario,
+      provider,
       project,
       search,
       status,
@@ -201,22 +207,36 @@ export function App() {
       if (analysisRequest.current === controller)
         analysisRequest.current = null;
     };
-  }, [source, scenario, project, search, status, range, from, to, reload]);
+  }, [
+    source,
+    scenario,
+    provider,
+    project,
+    search,
+    status,
+    range,
+    from,
+    to,
+    reload,
+  ]);
   const openSession = useCallback((id: string) => {
     setSelected(id);
     setPage("sessions");
+    window.scrollTo({ top: 0 });
   }, []);
   const nav = (p: Page) => {
     setPage(p);
     setSelected("");
+    window.scrollTo({ top: 0 });
   };
   const reset = () => {
     setProject("");
+    setProvider("");
     setSearch("");
     setStatus("");
     setRange("all");
     setSelected("");
-    setCollapsed([]);
+    setTimelineState({ mode: "daily" });
   };
   const saveLabel: SaveLabel = async (value) => {
     const response = await fetch("/api/annotations", {
@@ -234,23 +254,16 @@ export function App() {
   };
   const session = data?.sessions.find((s) => s.id === selected),
     metrics = data?.metrics;
+  const cursorOnly =
+    data?.source === "local" &&
+    (provider === "cursor" ||
+      (data.sessions.length > 0 &&
+        data.sessions.every((s) => s.provider === "cursor")));
   const title = pages.find((p) => p.id === page)!;
-  const visibleData = data
-    ? {
-        ...data,
-        sessions: data.sessions.filter((s) => !collapsed.includes(s.projectId)),
-        intervals: data.intervals.filter(
-          (i) =>
-            !collapsed.includes(
-              data.sessions.find((s) => s.id === i.sessionId)?.projectId ?? "",
-            ),
-        ),
-      }
-    : null;
-  const [viewChoice, setViewChoice] = useState<ViewChoice>({ mode: "fit" });
   const viewScope = JSON.stringify([
     source,
     scenario,
+    provider,
     range,
     from,
     to,
@@ -259,18 +272,12 @@ export function App() {
     status,
   ]);
   useEffect(() => {
-    setViewChoice({ mode: "fit" });
+    setTimelineState({ mode: "daily" });
   }, [viewScope]);
-  const axisWindow = data ? resolveView(data, viewChoice) : null;
-  const changeView = useCallback(
-    (window: Analysis["window"]) => setViewChoice({ mode: "custom", window }),
-    [],
-  );
   const importStatus = data?.importStatus;
   // Window end is exclusive, so the last covered day is one millisecond earlier.
   const dateLabel = data
-    ? shortDate(data.window.from) ===
-      shortDate(data.window.to - 1)
+    ? shortDate(data.window.from) === shortDate(data.window.to - 1)
       ? shortDate(data.window.from)
       : `${shortDate(data.window.from)} — ${shortDate(data.window.to - 1)}`
     : "";
@@ -319,17 +326,25 @@ export function App() {
           <div className="page-heading">
             <div>
               <h1>
-                {page === "overview" ? "AI 会话协作总览" : title.name}
+                {page === "overview"
+                  ? "AI 会话协作总览"
+                  : page === "timeline"
+                  ? {
+                      daily: "项目活动概览",
+                      hour: "小时协作时间轴",
+                      turns: "会话轮次详情",
+                    }[timelineState.mode]
+                  : title.name}
                 <span className="title-dot">.</span>
               </h1>
               <p>
                 {page === "overview"
                   ? "从一次派活，到多线并行，把每一段协作看清楚。"
                   : page === "timeline"
-                    ? "同一条时间轴上，查看各会话的执行、等待与输入。"
-                    : page === "projects"
-                      ? "按项目查看会话、执行工作量和 Token 用量。"
-                      : "一次会话，多轮协作；执行多久、跨度多久，分别说清楚。"}
+                  ? "从全天项目节奏，到小时协作，再到每一轮短响应。"
+                  : page === "projects"
+                  ? "按项目查看会话、执行工作量和 Token 用量。"
+                  : "一次会话，多轮协作；执行多久、跨度多久，分别说清楚。"}
               </p>
             </div>
             {data && <span className="date-chip">{dateLabel}</span>}
@@ -362,6 +377,22 @@ export function App() {
               >
                 <option value="parallel">三会话并行</option>
                 <option value="boundaries">异常与跨日</option>
+              </select>
+            )}
+            {source === "local" && (
+              <select
+                aria-label="会话来源"
+                value={provider}
+                onChange={(e) => {
+                  setProvider(e.target.value);
+                  setProject("");
+                  setSelected("");
+                  setTimelineState({ mode: "daily" });
+                }}
+              >
+                <option value="">Codex + Cursor</option>
+                <option value="codex">Codex</option>
+                <option value="cursor">Cursor</option>
               </select>
             )}
             <span className="filter-divider" />
@@ -474,14 +505,18 @@ export function App() {
                 ) : (
                   <span className="refresh-status" role="status">
                     {importStatus?.updatedAt
-                      ? `最近刷新 ${time(Date.parse(importStatus.updatedAt))} · ${importStatus.sessions} 个会话 · 新增 ${importStatus.newTurns} 轮`
+                      ? `最近刷新 ${time(
+                          Date.parse(importStatus.updatedAt),
+                        )} · ${importStatus.sessions} 个会话 · 新增 ${
+                          importStatus.newTurns
+                        } 轮`
                       : "尚未导入本机日志，点击“扫描 / 刷新”开始"}
                     {live.period !== "off" &&
                       (live.hidden
                         ? " · 页面隐藏，自动刷新暂停"
                         : live.busy
-                          ? " · 正在只读扫描"
-                          : ` · 每 ${live.period} 秒刷新`)}
+                        ? " · 正在只读扫描"
+                        : ` · 每 ${live.period} 秒刷新`)}
                   </span>
                 )}
                 {data.source === "local" && (
@@ -492,6 +527,13 @@ export function App() {
                         ? `${importStatus.files} 个日志（重读 ${importStatus.readFiles} · 缓存 ${importStatus.cachedFiles} · 截断 ${importStatus.cappedFiles}）· 跳过 ${importStatus.skippedLines} 行 · 耗时 ${importStatus.durationMs} ms`
                         : "尚未扫描。"}
                     </p>
+                    {importStatus?.providers && (
+                      <p>
+                        Codex {importStatus.providers.codex} 个会话 · Cursor{" "}
+                        {importStatus.providers.cursor} 个会话（只读{" "}
+                        {importStatus.cursor?.databases ?? 0} 个数据库）
+                      </p>
+                    )}
                     {importStatus?.updatedAt && (
                       <p>
                         本次新增 {importStatus.addedFiles} 个、更新{" "}
@@ -509,17 +551,60 @@ export function App() {
                   清除筛选 ↺
                 </button>
               </div>
-              {(page === "overview" || page === "timeline") && (
+              {source === "local" &&
+                data.sessions.some((s) => s.provider === "cursor") && (
+                  <p className="table-note cursor-coverage" role="note">
+                    Cursor 记录时长已汇总，按轮次输入时间归属；整轮边界及 Token
+                    未验证，活跃覆盖、等待与并发缺少证据时显示 N/A。
+                  </p>
+                )}
+              {page === "overview" && (
                 <div className="metrics">
                   <Metric
-                    label="AI 总工作量"
-                    value={duration(metrics!.workloadMs)}
-                    note={`已知执行 · 闭合 ${metrics!.closedTurns}/${metrics!.startedTurns} 轮`}
+                    label={
+                      cursorOnly ? "AI 累计时长 · Cursor 记录" : "AI 总工作量"
+                    }
+                    value={duration(
+                      cursorOnly
+                        ? metrics!.reportedWorkloadMs
+                        : data.sessions.some((s) => s.turns.length > 0) &&
+                          metrics!.closedTurns === 0 &&
+                          metrics!.reportedWorkloadMs === null
+                        ? null
+                        : metrics!.workloadMs +
+                          (metrics!.reportedWorkloadMs ?? 0),
+                    )}
+                    note={
+                      cursorOnly
+                        ? `记录覆盖 ${metrics!.reportedTurns}/${
+                            metrics!.reportedTurnTotal
+                          } 轮 · 按输入时间归属`
+                        : `已知执行 · 闭合 ${metrics!.closedTurns}/${
+                            metrics!.observedTurns
+                          } 轮${
+                            metrics!.reportedWorkloadMs !== null
+                              ? ` · Codex ${duration(
+                                  metrics!.workloadMs,
+                                )} + Cursor 记录 ${duration(
+                                  metrics!.reportedWorkloadMs,
+                                )}`
+                              : ""
+                          }`
+                    }
                   />
                   <Metric
                     label="AI 活跃覆盖"
-                    value={duration(metrics!.coverageMs)}
-                    note="去重后的现实时间"
+                    value={duration(
+                      data.sessions.some((s) => s.turns.length > 0) &&
+                        metrics!.closedTurns === 0
+                        ? null
+                        : metrics!.coverageMs,
+                    )}
+                    note={
+                      metrics!.reportedWorkloadMs !== null
+                        ? "仅含可定位区间 · 去重后的现实时间"
+                        : "去重后的现实时间"
+                    }
                   />
                   <Metric
                     label="平均并行倍数"
@@ -528,18 +613,35 @@ export function App() {
                         ? "N/A"
                         : metrics!.averageParallelism.toFixed(1) + "×"
                     }
-                    note={`${duration(metrics!.workloadMs)} ÷ ${duration(metrics!.coverageMs)}`}
+                    note={
+                      metrics!.coverageMs > 0
+                        ? `${
+                            metrics!.reportedWorkloadMs !== null
+                              ? "仅含可定位区间 · "
+                              : ""
+                          }${duration(metrics!.workloadMs)} ÷ ${duration(
+                            metrics!.coverageMs,
+                          )}`
+                        : "缺少可定位的执行区间"
+                    }
                   />
                   {page === "overview" ? (
                     <Metric
                       label="已知 Token"
                       value={tokens(metrics!.tokens)}
-                      note={`${metrics!.tokenSessions}/${data.sessions.length} 会话有计数 · 按上报时间归属`}
+                      note={`${metrics!.tokenSessions}/${
+                        data.sessions.length
+                      } 会话有计数 · 按上报时间归属`}
                     />
                   ) : (
                     <Metric
                       label="峰值并行数"
-                      value={String(metrics!.peakParallelism)}
+                      value={
+                        metrics!.closedTurns === 0 &&
+                        data.sessions.some((s) => s.provider === "cursor")
+                          ? "N/A"
+                          : String(metrics!.peakParallelism)
+                      }
                       note="同一时刻的独立执行轮次"
                     />
                   )}
@@ -547,7 +649,7 @@ export function App() {
               )}
               {page === "overview" && (
                 <>
-                  <section className="panel">
+                  <section className="overview-timeline">
                     <div className="panel-heading">
                       <h2>协作时间轴</h2>
                       <button
@@ -557,18 +659,12 @@ export function App() {
                         展开完整时间轴 ↗
                       </button>
                     </div>
-                    <TimelineControls
-                      key={viewScope}
+                    <CollaborationTimeline
                       data={data}
-                      view={axisWindow!}
-                      choice={viewChoice}
-                      onChange={setViewChoice}
-                    />
-                    <Timeline
-                      data={data}
+                      state={timelineState}
+                      onChange={setTimelineState}
                       onSession={openSession}
-                      view={axisWindow!}
-                      onViewChange={changeView}
+                      compact
                     />
                   </section>
                   <div className="recent-heading">
@@ -637,7 +733,36 @@ export function App() {
                               <b>{p.name}</b>
                             </td>
                             <td>{p.sessionCount}</td>
-                            <td>{duration(p.workloadMs)}</td>
+                            <td>
+                              <span className="session-duration">
+                                {duration(
+                                  data.sessions.some(
+                                    (s) =>
+                                      s.projectId === p.id &&
+                                      s.turns.some(
+                                        (t) => t.status !== "unknown",
+                                      ),
+                                  )
+                                    ? p.workloadMs + (p.reportedWorkloadMs ?? 0)
+                                    : p.reportedWorkloadMs,
+                                )}
+                                {p.reportedWorkloadMs !== null && (
+                                  <small>
+                                    Cursor 记录{" "}
+                                    {data.sessions.some(
+                                      (s) =>
+                                        s.projectId === p.id &&
+                                        s.turns.some(
+                                          (t) => t.status !== "unknown",
+                                        ),
+                                    )
+                                      ? duration(p.reportedWorkloadMs) + " · "
+                                      : "· "}
+                                    {p.reportedTurns}/{p.reportedTurnTotal} 轮
+                                  </small>
+                                )}
+                              </span>
+                            </td>
                             <td>{duration(p.waitingMs)}</td>
                             <td>{tokens(p.tokens)}</td>
                             <td>
@@ -698,6 +823,7 @@ export function App() {
                           <thead>
                             <tr>
                               <th>会话</th>
+                              <th>来源</th>
                               <th>项目</th>
                               <th>AI 执行累计</th>
                               <th>会话跨度</th>
@@ -721,18 +847,50 @@ export function App() {
                                     </small>
                                   )}
                                 </td>
+                                <td>
+                                  <span className="provider-badge">
+                                    {s.provider === "cursor"
+                                      ? "Cursor"
+                                      : "Codex"}
+                                  </span>
+                                </td>
                                 <td>{s.projectName}</td>
-                                <td>{duration(s.workloadMs)}</td>
+                                <td>
+                                  {s.provider === "cursor" ? (
+                                    <span
+                                      className="session-duration"
+                                      title="按轮次输入时间归属的 Cursor 记录值；不能定位绝对起止或用于并发统计"
+                                    >
+                                      {duration(s.reportedWorkloadMs ?? null)}
+                                      <small>
+                                        Cursor 记录 · {s.reportedTurns ?? 0}/
+                                        {s.reportedTurnTotal ?? 0} 轮
+                                      </small>
+                                    </span>
+                                  ) : (
+                                    duration(
+                                      s.turns.some(
+                                        (t) => t.status !== "unknown",
+                                      )
+                                        ? s.workloadMs
+                                        : null,
+                                    )
+                                  )}
+                                </td>
                                 <td>{duration(s.spanMs)}</td>
                                 <td>{tokens(s.tokens)}</td>
                                 <td>
                                   {
                                     s.turns.filter(
                                       (t) =>
-                                        (t.start ?? t.end ?? Infinity) <
-                                          data.window.to &&
-                                        (t.end ?? t.start ?? -Infinity) >=
-                                          data.window.from,
+                                        (t.start ??
+                                          t.end ??
+                                          t.observedAt ??
+                                          Infinity) < data.window.to &&
+                                        (t.end ??
+                                          t.start ??
+                                          t.observedAt ??
+                                          -Infinity) >= data.window.from,
                                     ).length
                                   }
                                 </td>
@@ -747,86 +905,26 @@ export function App() {
                 </section>
               )}
               {page === "timeline" && (
-                <section className="panel timeline-panel">
-                  <div className="panel-heading">
-                    <h2>多会话时间轴</h2>
-                    <span className="mini-label">
-                      峰值 {metrics!.peakParallelism} 路并行
-                    </span>
-                  </div>
-                  <div className="timeline-controls">
-                    <select
-                      aria-label="包含轮次状态"
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                    >
-                      <option value="">全部状态</option>
-                      {Object.entries(statusText).map(([id, name]) => (
-                        <option key={id} value={id}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={showWait}
-                        onChange={(e) => setShowWait(e.target.checked)}
-                      />
-                      显示闭合等待
-                    </label>
-                    {data.projects.length > 1 && (
-                      <span className="filter-divider" />
-                    )}
-                    {data.projects.length > 1 &&
-                      data.projects.map((p) => (
-                        <button
-                          key={p.id}
-                          className="chip"
-                          aria-pressed={!collapsed.includes(p.id)}
-                          onClick={() =>
-                            setCollapsed((v) =>
-                              v.includes(p.id)
-                                ? v.filter((i) => i !== p.id)
-                                : [...v, p.id],
-                            )
-                          }
-                        >
-                          {p.name}
-                        </button>
-                      ))}
-                  </div>
-                  <TimelineControls
-                    key={viewScope}
+                <>
+                  <CollaborationTimeline
                     data={data}
-                    view={axisWindow!}
-                    choice={viewChoice}
-                    onChange={setViewChoice}
-                  />
-                  <Timeline
-                    data={visibleData!}
+                    state={timelineState}
+                    onChange={setTimelineState}
                     onSession={openSession}
-                    showWait={showWait}
-                    view={axisWindow!}
-                    onViewChange={changeView}
                   />
-                  <details
-                    className="concurrency"
-                    onToggle={(e) => {
-                      if (e.currentTarget.open)
-                        window.dispatchEvent(new Event("resize"));
-                    }}
-                  >
-                    <summary>同轴并发曲线</summary>
-                    <p>平均倍数只针对活跃覆盖时段。</p>
-                    <Concurrency data={data} view={axisWindow!} />
-                  </details>
-                </section>
+                  <AdvancedTimeline
+                    data={data}
+                    scope={viewScope}
+                    onSession={openSession}
+                    status={status}
+                    onStatus={setStatus}
+                  />
+                </>
               )}
               <details className="coverage">
                 <summary>
                   数据覆盖与口径 · 边界 {metrics!.closedTurns}/
-                  {metrics!.startedTurns} 轮 · {data.issues.length} 项提示
+                  {metrics!.observedTurns} 轮 · {data.issues.length} 项提示
                 </summary>
                 <p>
                   工作量、覆盖与 Token 都是可恢复的已知值；缺失部分未补零。Token
@@ -891,8 +989,8 @@ function SessionDetail({
 }) {
   const selected = s.turns.filter(
     (t) =>
-      (t.start ?? t.end ?? Infinity) < data.window.to &&
-      (t.end ?? t.start ?? -Infinity) >= data.window.from,
+      (t.start ?? t.end ?? t.observedAt ?? Infinity) < data.window.to &&
+      (t.end ?? t.start ?? t.observedAt ?? -Infinity) >= data.window.from,
   );
   const usage = s.usage.filter(
     (u) => u.at >= data.window.from && u.at < data.window.to,
@@ -901,9 +999,25 @@ function SessionDetail({
     <>
       <div className="detail-metrics">
         <Metric
-          label="AI 执行累计"
-          value={duration(s.workloadMs)}
-          note="日志开始至终止的经过时间，包含工具、内部等待及可能的暂停"
+          label={
+            s.provider === "cursor"
+              ? "AI 执行累计 · Cursor 记录"
+              : "AI 执行累计"
+          }
+          value={duration(
+            s.provider === "cursor"
+              ? s.reportedWorkloadMs ?? null
+              : s.turns.some((t) => t.status !== "unknown")
+              ? s.workloadMs
+              : null,
+          )}
+          note={
+            s.provider === "cursor"
+              ? `记录覆盖 ${s.reportedTurns ?? 0}/${
+                  s.reportedTurnTotal ?? 0
+                } 轮 · 按输入时间归属，绝对起止未知`
+              : "日志开始至终止的经过时间，包含工具、内部等待及可能的暂停"
+          }
         />
         <Metric
           label="会话跨度"
@@ -915,9 +1029,16 @@ function SessionDetail({
         {data.source === "local" && (
           <span>日志边界经过时间不等同应用内部执行计时</span>
         )}
+        <span className="provider-badge">
+          {s.provider === "cursor" ? "Cursor" : "Codex"}
+        </span>
         <span>已知闭合等待 {duration(s.waitingMs)}</span>
         <span>
-          {s.openWaiting ? "待下次输入（开放等待不累计）" : "无开放等待"}
+          {s.provider === "cursor"
+            ? "开放等待未知"
+            : s.openWaiting
+            ? "待下次输入（开放等待不累计）"
+            : "无开放等待"}
         </span>
         <span>
           已知 Token {tokens(s.tokens)} ·{" "}
@@ -937,23 +1058,36 @@ function SessionDetail({
               <div>
                 <strong>第 {s.turns.indexOf(t) + 1} 轮</strong>
                 <p>
-                  {t.start === null ? "起点未知" : time(t.start)} →{" "}
-                  {t.end === null ? "终点未知" : time(t.end)} · 窗口内执行{" "}
+                  {t.observedAt != null
+                    ? `输入 ${time(t.observedAt)} · 起点未知`
+                    : t.start === null
+                    ? "起点未知"
+                    : time(t.start)}{" "}
+                  → {t.end === null ? "终点未知" : time(t.end)} · 窗口内执行{" "}
                   {t.status === "unknown"
                     ? "N/A"
                     : duration(
                         interval ? interval.end - interval.start : 0,
                       )}{" "}
                   · Token {tokens(t.tokens)}
+                  {t.reportedDurationMs !== undefined && (
+                    <span className="reported-duration">
+                      {" "}
+                      · Cursor 记录时长 {duration(t.reportedDurationMs)}
+                      （绝对起止未知，不补造执行区间）
+                    </span>
+                  )}
                 </p>
               </div>
               <span className={"turn-status " + t.status}>
                 {t.status === "unknown"
-                  ? t.end === null
+                  ? t.observedAt != null
+                    ? "边界未知"
+                    : t.end === null
                     ? "缺少结束"
                     : t.start === null
-                      ? "缺少开始"
-                      : "边界冲突"
+                    ? "缺少开始"
+                    : "边界冲突"
                   : statusText[t.status]}
               </span>
             </div>
@@ -964,7 +1098,9 @@ function SessionDetail({
         <summary>数据证据与统计口径</summary>
         <p>
           {data.source === "local" &&
-            (s.titleSource === "index"
+            (s.titleSource === "cursor"
+              ? "会话标题来自 Cursor 会话索引。 "
+              : s.titleSource === "index"
               ? "会话标题来自 Codex 会话索引。 "
               : "索引中暂无该会话标题，显示为未命名会话。 ")}
           来源 {data.source === "demo" ? "合成样例" : "本机只读白名单"}；
@@ -973,7 +1109,19 @@ function SessionDetail({
         </p>
         <p>
           {s.tokenMode === "record"
-            ? `输入 ${tokens(usage.reduce((a, u) => a + u.input, 0))} / 缓存 ${tokens(usage.every((u) => u.cached !== null) ? usage.reduce((a, u) => a + (u.cached ?? 0), 0) : null)}（输入子集）/ 输出 ${tokens(usage.reduce((a, u) => a + u.output, 0))} / 推理 ${tokens(usage.every((u) => u.reasoning !== null) ? usage.reduce((a, u) => a + (u.reasoning ?? 0), 0) : null)}（输出子集）`
+            ? `输入 ${tokens(
+                usage.reduce((a, u) => a + u.input, 0),
+              )} / 缓存 ${tokens(
+                usage.every((u) => u.cached !== null)
+                  ? usage.reduce((a, u) => a + (u.cached ?? 0), 0)
+                  : null,
+              )}（输入子集）/ 输出 ${tokens(
+                usage.reduce((a, u) => a + u.output, 0),
+              )} / 推理 ${tokens(
+                usage.every((u) => u.reasoning !== null)
+                  ? usage.reduce((a, u) => a + (u.reasoning ?? 0), 0)
+                  : null,
+              )}（输出子集）`
             : "分项或轮次 Token 不足以确定，显示 N/A。"}
         </p>
         <ul>

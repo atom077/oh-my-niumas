@@ -78,6 +78,10 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
     await page.clock.runFor(60000);
     expect(scans).toBe(hidden);
     await expect(page.locator(".refresh-status")).toContainText("暂停");
+    // Returning to the page reloads analysis before the next refresh timer is scheduled.
+    const resumed = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/api/analysis",
+    );
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", {
         configurable: true,
@@ -85,6 +89,10 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
       });
       document.dispatchEvent(new Event("visibilitychange"));
     });
+    await resumed;
+    await expect(
+      page.getByRole("button", { name: "扫描 / 刷新", exact: true }),
+    ).toBeEnabled();
     await page.clock.runFor(15000);
     await expect.poll(() => scans).toBe(hidden + 1);
     await expect(

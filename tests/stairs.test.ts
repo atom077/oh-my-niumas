@@ -15,13 +15,23 @@ test("展开会话后按轮次逐级下移，并在每轮起点画衔接线", ()
   assert.ok(target, "演示数据应包含多轮会话");
   const turns = stairTurns(data, target);
 
-  const closed = timelineRows(data, new Set());
-  assert.equal(closed.length, data.sessions.length);
-  assert.ok(closed.every((r) => r.height === ROW_HEIGHT.session));
+  const projectIds = new Set(data.projects.map((p) => p.id));
+  const closed = timelineRows(data, new Set(), projectIds);
+  assert.equal(closed.length, data.projects.length + data.sessions.length);
+  assert.ok(
+    closed.every(
+      (r) =>
+        r.height ===
+        (r.kind === "project" ? ROW_HEIGHT.project : ROW_HEIGHT.session),
+    ),
+  );
 
-  const rows = timelineRows(data, new Set([target.id]));
+  const rows = timelineRows(data, new Set([target.id]), projectIds);
   const steps = rows.filter((r) => r.sessionId === target.id && r.turnId);
-  assert.equal(rows.length, data.sessions.length + turns.length);
+  assert.equal(
+    rows.length,
+    data.projects.length + data.sessions.length + turns.length,
+  );
   assert.deepEqual(
     steps.map((r) => r.step),
     turns.map((_, i) => i),
@@ -32,8 +42,7 @@ test("展开会话后按轮次逐级下移，并在每轮起点画衔接线", ()
     rows.slice(parent + 1, parent + 1 + turns.length).map((r) => r.turnId),
     turns.map((t) => t.id),
   );
-  for (let i = 1; i < steps.length; i++)
-    assert.ok(steps[i].y > steps[i - 1].y);
+  for (let i = 1; i < steps.length; i++) assert.ok(steps[i].y > steps[i - 1].y);
   // Turn starts follow the same order, which makes the rows read as stairs.
   for (let i = 1; i < turns.length; i++)
     assert.ok((turns[i].start ?? 0) >= (turns[i - 1].start ?? 0));
@@ -52,7 +61,7 @@ test("展开会话后按轮次逐级下移，并在每轮起点画衔接线", ()
   );
   assert.ok(summary.length > 0 && summary.every((i) => i.value[6] === 1));
   const others = items.filter(
-    (i) => i.sessionId !== target.id && i.value[3] !== 4,
+    (i) => i.sessionId && i.sessionId !== target.id && i.value[3] !== 4,
   );
   assert.ok(others.every((i) => i.value[6] === 0));
 });
@@ -60,6 +69,72 @@ test("展开会话后按轮次逐级下移，并在每轮起点画衔接线", ()
 test("单轮会话不生成阶梯行", () => {
   const data = analyzeSources(demoSources("parallel"));
   const single = data.sessions.filter((s) => stairTurns(data, s).length < 2);
-  const rows = timelineRows(data, new Set(single.map((s) => s.id)));
-  assert.equal(rows.length, data.sessions.length);
+  const rows = timelineRows(
+    data,
+    new Set(single.map((s) => s.id)),
+    new Set(data.projects.map((p) => p.id)),
+  );
+  assert.equal(rows.length, data.projects.length + data.sessions.length);
+});
+
+test("时间轴默认按项目聚合，同项目多个会话只占一行", () => {
+  const data = analyzeSources(demoSources("parallel"));
+  const rows = timelineRows(data, new Set());
+  assert.equal(rows.length, data.projects.length);
+});
+
+test("项目聚合合并重叠、保留空档，等待不会覆盖执行，也不改变工作量与并发", () => {
+  const data = analyzeSources(demoSources("parallel"));
+  const project = data.projects.find((p) => p.sessionCount === 2)!;
+  const ss = data.sessions.filter((s) => s.projectId === project.id);
+  const base = data.window.from;
+  const interval = (
+    session: string,
+    start: number,
+    end: number,
+    kind: "ai_active" | "awaiting_user",
+  ) => ({
+    id: `${session}:${start}`,
+    sessionId: session,
+    turnId: "test",
+    start: base + start,
+    end: base + end,
+    status: "completed" as const,
+    kind,
+  });
+  data.intervals = [
+    interval(ss[0].id, 0, 10, "ai_active"),
+    interval(ss[1].id, 5, 15, "ai_active"),
+    interval(ss[0].id, 20, 25, "ai_active"),
+    interval(ss[1].id, 8, 22, "awaiting_user"),
+  ];
+  const before = structuredClone(data.metrics);
+  const rows = timelineRows(data, new Set());
+  const summary = placeItems(data, rows).filter(
+    (i) => i.projectId === project.id,
+  );
+  assert.deepEqual(
+    summary.filter((i) => i.value[3] === 0).map((i) => i.value.slice(1, 3)),
+    [
+      [base, base + 15],
+      [base + 20, base + 25],
+    ],
+  );
+  assert.deepEqual(
+    summary.filter((i) => i.value[3] === 1).map((i) => i.value.slice(1, 3)),
+    [[base + 15, base + 20]],
+  );
+  assert.deepEqual(data.metrics, before);
+  assert.ok(
+    summary.every((i) => !i.sessionId),
+    "聚合行点击必须定位项目，不随机定位会话",
+  );
+  const open = timelineRows(data, new Set(), new Set([project.id]));
+  const detail = placeItems(data, open).filter((i) => i.sessionId);
+  assert.ok(detail.some((i) => i.sessionId === ss[0].id));
+  assert.ok(detail.some((i) => i.sessionId === ss[1].id));
+  assert.equal(
+    placeItems(data, rows, false).filter((i) => i.value[3] === 1).length,
+    0,
+  );
 });
