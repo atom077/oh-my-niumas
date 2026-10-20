@@ -220,3 +220,40 @@ for (const mode of ["关闭", "隐藏"])
       await writeFile(input, original);
     }
   });
+
+test("Demo 初次加载时隐藏再显示仍能得到分析结果", async ({ page }) => {
+  let release = () => {},
+    captured = false;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  await page.route("**/api/analysis?**", async (route) => {
+    const snapshot = await route.fetch();
+    captured = true;
+    await gate;
+    await route.fulfill({ response: snapshot }).catch(() => {});
+  });
+  try {
+    await page.goto("/");
+    await expect.poll(() => captured).toBe(true);
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    release();
+    await page.unrouteAll({ behavior: "wait" });
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect(page.locator(".metric strong").first()).toHaveText("100 min");
+  } finally {
+    release();
+  }
+});

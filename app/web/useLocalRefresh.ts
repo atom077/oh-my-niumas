@@ -30,8 +30,10 @@ export function useLocalRefresh(
     const visibility = () => {
       const hide = document.visibilityState !== "visible";
       setHidden(hide);
-      if (hide) cancel();
-      else if (local) onUpdated();
+      if (local) {
+        if (hide) cancel();
+        else onUpdated();
+      }
     };
     document.addEventListener("visibilitychange", visibility);
     return () => document.removeEventListener("visibilitychange", visibility);
