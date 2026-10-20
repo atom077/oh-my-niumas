@@ -1,15 +1,27 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts/core";
 import { CustomChart, LineChart } from "echarts/charts";
-import { GridComponent, TooltipComponent } from "echarts/components";
+import {
+  GridComponent,
+  TooltipComponent,
+  DataZoomComponent,
+} from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { CustomSeriesOption } from "echarts/charts";
 import type { Analysis } from "../core/types";
+import {
+  timelineItems,
+  limitWindow,
+  containsActivity,
+  viewTime,
+  type TimeWindow,
+} from "./timeline-window";
 echarts.use([
   CustomChart,
   LineChart,
   GridComponent,
   TooltipComponent,
+  DataZoomComponent,
   CanvasRenderer,
 ]);
 
@@ -99,50 +111,70 @@ const renderItem: NonNullable<CustomSeriesOption["renderItem"]> = (
 export function Timeline({
   data,
   onSession,
-  zoom = false,
+  view,
+  onViewChange,
   showWait = true,
 }: {
   data: Analysis;
   onSession: (id: string) => void;
-  compact?: boolean;
-  zoom?: boolean;
+  view: TimeWindow;
+  onViewChange: (view: TimeWindow) => void;
   showWait?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<ReturnType<typeof echarts.init> | null>(null);
+  const handlers = useRef({ onSession, onViewChange, full: data.window });
+  handlers.current = { onSession, onViewChange, full: data.window };
+  const hasSessions = data.sessions.length > 0;
   useEffect(() => {
-    if (!host.current || !data.sessions.length) return;
+    if (!host.current || !hasSessions) return;
     const chart = echarts.init(host.current);
-    const items = data.intervals
-      .filter((i) => showWait || i.kind !== "awaiting_user")
-      .map((i) => ({
-        value: [
-          data.sessions.findIndex((s) => s.id === i.sessionId),
-          i.start,
-          i.end,
-          i.kind === "awaiting_user" ? 1 : 0,
-          i.status === "completed" ? 0 : 1,
-        ],
-        sessionId: i.sessionId,
-      }));
-    data.sessions.forEach((s, lane) => {
-      for (const t of s.turns)
-        if (
-          t.status === "unknown" &&
-          t.start !== null &&
-          t.start >= data.window.from &&
-          t.start < data.window.to
-        )
-          items.push({
-            value: [lane, t.start, t.start, 2, 0],
-            sessionId: s.id,
-          });
-      for (const i of s.inputs)
-        if (i.at >= data.window.from && i.at < data.window.to)
-          items.push({ value: [lane, i.at, i.at, 3, 0], sessionId: s.id });
+    chartRef.current = chart;
+    chart.on("click", (p) => {
+      const id = (p.data as { sessionId?: string })?.sessionId;
+      if (id) handlers.current.onSession(id);
     });
+    chart.on("datazoom", (event) => {
+      const item = event as {
+        start?: number;
+        end?: number;
+        startValue?: number;
+        endValue?: number;
+        batch?: {
+          start?: number;
+          end?: number;
+          startValue?: number;
+          endValue?: number;
+        }[];
+      };
+      const zoom = item.batch?.[0] ?? item,
+        full = handlers.current.full;
+      const from =
+        zoom.startValue ??
+        full.from + (Number(zoom.start) / 100) * (full.to - full.from);
+      const to =
+        zoom.endValue ??
+        full.from + (Number(zoom.end) / 100) * (full.to - full.from);
+      if (Number.isFinite(from) && Number.isFinite(to) && to > from)
+        handlers.current.onViewChange(limitWindow({ from, to }, full));
+    });
+    const resize = new ResizeObserver(() => chart.resize());
+    resize.observe(host.current);
+    return () => {
+      resize.disconnect();
+      chart.dispose();
+      chartRef.current = null;
+    };
+  }, [hasSessions]);
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const items = timelineItems(data, showWait);
+    const crossDay =
+      viewTime(view.from).slice(0, 5) !== viewTime(view.to).slice(0, 5);
     chart.setOption({
       animation: false,
-      grid: { left: 10, right: 25, top: 35, bottom: 35 },
+      grid: { left: 10, right: 25, top: 35, bottom: 75 },
       tooltip: {
         formatter: (p: unknown) => {
           const v = (p as { value: number[] }).value;
@@ -157,7 +189,16 @@ export function Timeline({
         type: "time",
         min: data.window.from,
         max: data.window.to,
-        axisLabel: { formatter: (v: number) => time(v), color: "#8a8d95" },
+        axisLabel: {
+          formatter: (v: number) =>
+            crossDay
+              ? viewTime(v)
+              : view.to - view.from < 60000
+                ? viewTime(v, true).slice(6)
+                : time(v),
+          color: "#8a8d95",
+          hideOverlap: true,
+        },
         axisLine: { show: false },
         splitLine: { lineStyle: { color: "#eceef2", type: "dashed" } },
       },
@@ -167,26 +208,52 @@ export function Timeline({
         data: data.sessions.map((s) => s.name),
         show: false,
       },
+      dataZoom: [
+        {
+          id: "slider",
+          type: "slider",
+          xAxisIndex: 0,
+          startValue: view.from,
+          endValue: view.to,
+          filterMode: "none",
+          minValueSpan: 1,
+          bottom: 8,
+          height: 20,
+          showDataShadow: false,
+          fillerColor: "#dfe9fb",
+          borderColor: "#d5deef",
+          handleStyle: { color: "#5682d7", borderColor: "#5682d7" },
+          moveHandleStyle: { color: "#adc2e9" },
+          labelFormatter: (value: number) =>
+            viewTime(value, view.to - view.from < 60000),
+          brushSelect: false,
+          throttle: 60,
+        },
+        {
+          id: "inside",
+          type: "inside",
+          xAxisIndex: 0,
+          startValue: view.from,
+          endValue: view.to,
+          filterMode: "none",
+          zoomOnMouseWheel: "ctrl",
+          moveOnMouseWheel: false,
+          moveOnMouseMove: false,
+          preventDefaultMouseMove: false,
+          throttle: 60,
+        },
+      ],
       series: [
         {
           type: "custom",
+          clip: true,
           encode: { x: [1, 2], y: 0 },
           renderItem,
           data: items,
         },
       ],
     });
-    chart.on("click", (p) => {
-      const id = (p.data as { sessionId?: string })?.sessionId;
-      if (id) onSession(id);
-    });
-    const resize = new ResizeObserver(() => chart.resize());
-    resize.observe(host.current);
-    return () => {
-      resize.disconnect();
-      chart.dispose();
-    };
-  }, [data, onSession, zoom, showWait]);
+  }, [data, view.from, view.to, showWait]);
   if (!data.sessions.length)
     return (
       <div className="empty">
@@ -196,37 +263,48 @@ export function Timeline({
       </div>
     );
   return (
-    <div className="timeline-frame">
-      <div className="fixed-names" style={{ paddingTop: 35 }}>
-        {data.sessions.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => onSession(s.id)}
-            title={s.note ? `${s.name} · ${s.note}` : s.name}
-            style={{ height: 60 }}
-          >
-            <small>{s.projectName}</small>
-            {s.name}
-            <span>↗</span>
-          </button>
-        ))}
+    <>
+      {!containsActivity(data, view, showWait) && (
+        <p className="viewport-empty">当前显示范围没有活动</p>
+      )}
+      <div className="timeline-frame">
+        <div className="fixed-names" style={{ paddingTop: 35 }}>
+          {data.sessions.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onSession(s.id)}
+              title={s.note ? `${s.name} · ${s.note}` : s.name}
+              style={{ height: 60 }}
+            >
+              <small>{s.projectName}</small>
+              {s.name}
+              <span>↗</span>
+            </button>
+          ))}
+        </div>
+        <div className="chart-scroll">
+          <div
+            ref={host}
+            role="img"
+            aria-label="多会话协作时间轴，执行、等待、输入和未知状态均有独立形状"
+            style={{
+              height: data.sessions.length * 60 + 110,
+              minWidth: 570,
+            }}
+          />
+        </div>
       </div>
-      <div className="chart-scroll">
-        <div
-          ref={host}
-          role="img"
-          aria-label="多会话协作时间轴，执行、等待、输入和未知状态均有独立形状"
-          style={{
-            height: data.sessions.length * 60 + 70,
-            minWidth: zoom ? 1400 : 570,
-          }}
-        />
-      </div>
-    </div>
+    </>
   );
 }
 
-export function Concurrency({ data }: { data: Analysis }) {
+export function Concurrency({
+  data,
+  view,
+}: {
+  data: Analysis;
+  view: TimeWindow;
+}) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!host.current) return;
@@ -237,8 +315,8 @@ export function Concurrency({ data }: { data: Analysis }) {
       tooltip: { trigger: "axis" },
       xAxis: {
         type: "time",
-        min: data.window.from,
-        max: data.window.to,
+        min: view.from,
+        max: view.to,
         axisLabel: { formatter: (v: number) => time(v) },
       },
       yAxis: {
@@ -264,7 +342,7 @@ export function Concurrency({ data }: { data: Analysis }) {
       resize.disconnect();
       chart.dispose();
     };
-  }, [data]);
+  }, [data, view.from, view.to]);
   return (
     <div
       ref={host}

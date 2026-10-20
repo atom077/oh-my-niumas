@@ -7,6 +7,8 @@ import {
   type OriginalProject,
   type SaveLabel,
 } from "./LocalLabels";
+import { TimelineControls } from "./TimelineControls";
+import { resolveView, type ViewChoice } from "./timeline-window";
 import { useLocalRefresh } from "./useLocalRefresh";
 import type { ImportStatus } from "../importer";
 
@@ -68,7 +70,6 @@ export function App() {
     cancelAnalysis,
   );
   const [showWait, setShowWait] = useState(true),
-    [zoom, setZoom] = useState(false),
     [collapsed, setCollapsed] = useState<string[]>([]);
   useEffect(() => {
     const controller = new AbortController();
@@ -176,6 +177,25 @@ export function App() {
         ),
       }
     : null;
+  const [viewChoice, setViewChoice] = useState<ViewChoice>({ mode: "fit" });
+  const viewScope = JSON.stringify([
+    source,
+    scenario,
+    range,
+    from,
+    to,
+    project,
+    search,
+    status,
+  ]);
+  useEffect(() => {
+    setViewChoice({ mode: "fit" });
+  }, [viewScope]);
+  const axisWindow = data ? resolveView(data, viewChoice) : null;
+  const changeView = useCallback(
+    (window: Analysis["window"]) => setViewChoice({ mode: "custom", window }),
+    [],
+  );
   const date = new Date(data?.window.from ?? Date.now());
   return (
     <div className="shell">
@@ -226,7 +246,6 @@ export function App() {
             进度一定我催。
           </strong>
           <p>多会话并行，统一查看。</p>
-          <div className="local-dot">本地优先 · 只读观测</div>
           <small>v0.1 / STOP CODING. START HERDING.</small>
         </div>
       </aside>
@@ -243,7 +262,6 @@ export function App() {
         <div className="content" aria-busy={loading}>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">HUMAN × AI / COLLABORATION</div>
               <h1>
                 {page === "overview" ? "AI 会话协作总览" : title.name}
                 <span className="title-dot">.</span>
@@ -489,8 +507,20 @@ export function App() {
                         展开完整时间轴 ↗
                       </button>
                     </div>
+                    <TimelineControls
+                      key={viewScope}
+                      data={data}
+                      view={axisWindow!}
+                      choice={viewChoice}
+                      onChange={setViewChoice}
+                    />
                     <Legend />
-                    <Timeline data={data} onSession={openSession} compact />
+                    <Timeline
+                      data={data}
+                      onSession={openSession}
+                      view={axisWindow!}
+                      onViewChange={changeView}
+                    />
                   </section>
                   <div className="recent-heading">
                     <h2>最近完成的会话</h2>
@@ -703,9 +733,6 @@ export function App() {
                       />
                       显示闭合等待
                     </label>
-                    <button onClick={() => setZoom((v) => !v)}>
-                      {zoom ? "全窗口" : "放大 2×"}
-                    </button>
                     {data.projects.map((p) => (
                       <button
                         key={p.id}
@@ -722,12 +749,20 @@ export function App() {
                       </button>
                     ))}
                   </div>
+                  <TimelineControls
+                    key={viewScope}
+                    data={data}
+                    view={axisWindow!}
+                    choice={viewChoice}
+                    onChange={setViewChoice}
+                  />
                   <Legend />
                   <Timeline
                     data={visibleData!}
                     onSession={openSession}
                     showWait={showWait}
-                    zoom={zoom}
+                    view={axisWindow!}
+                    onViewChange={changeView}
                   />
                   <details
                     onToggle={(e) => {
@@ -738,7 +773,7 @@ export function App() {
                     <summary>
                       查看同轴并发曲线 · 平均倍数只针对活跃覆盖时段
                     </summary>
-                    <Concurrency data={data} />
+                    <Concurrency data={data} view={axisWindow!} />
                   </details>
                 </section>
               )}
