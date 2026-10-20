@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Analysis, Session } from "../core/types";
 import { Timeline, Concurrency, duration, time, tokens } from "./Timeline";
 import {
@@ -54,16 +54,25 @@ export function App() {
   const [reload, setReload] = useState(0),
     [loading, setLoading] = useState(false);
   const onUpdated = useCallback(() => setReload((n) => n + 1), []);
+  const analysisRequest = useRef<AbortController | null>(null);
+  const cancelAnalysis = useCallback(() => {
+    analysisRequest.current?.abort();
+    analysisRequest.current = null;
+    setLoading(false);
+  }, []);
   const live = useLocalRefresh(
     source === "local",
     Boolean(data?.source === "local" && data.importStatus?.updatedAt),
+    loading,
     onUpdated,
+    cancelAnalysis,
   );
   const [showWait, setShowWait] = useState(true),
     [zoom, setZoom] = useState(false),
     [collapsed, setCollapsed] = useState<string[]>([]);
   useEffect(() => {
     const controller = new AbortController();
+    analysisRequest.current = controller;
     const params = new URLSearchParams({
       source,
       scenario,
@@ -100,17 +109,27 @@ export function App() {
         return r.json();
       })
       .then((v: Response) => {
+        if (controller.signal.aborted || analysisRequest.current !== controller)
+          return;
         setData(v);
         setError("");
         setLoading(false);
       })
       .catch((e) => {
-        if (e.name !== "AbortError") {
+        if (
+          !controller.signal.aborted &&
+          analysisRequest.current === controller &&
+          e.name !== "AbortError"
+        ) {
           setError(e.message);
           setLoading(false);
         }
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (analysisRequest.current === controller)
+        analysisRequest.current = null;
+    };
   }, [source, scenario, project, search, status, range, from, to, reload]);
   const openSession = useCallback((id: string) => {
     setSelected(id);
@@ -330,7 +349,7 @@ export function App() {
               <>
                 <button
                   className="refresh-button"
-                  disabled={live.busy}
+                  disabled={live.busy || loading}
                   onClick={() => void live.refresh()}
                 >
                   {live.busy ? "只读扫描中…" : "扫描 / 刷新"}

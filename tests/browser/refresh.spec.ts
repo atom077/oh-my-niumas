@@ -140,3 +140,83 @@ test("慢刷新不重叠，切换数据源取消过期结果", async ({ page }) 
   expect(calls).toBe(1);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+for (const mode of ["关闭", "隐藏"])
+  test(`扫描结束后${mode}会取消尚未返回的分析快照`, async ({ page }) => {
+    const root = await readFile(".local/e2e-root.txt", "utf8");
+    const input = join(root, "sessions", "synthetic.jsonl");
+    const original = await readFile(input, "utf8");
+    let release = () => {},
+      captured = false;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    try {
+      await page.clock.install();
+      await page.goto("/");
+      await page.getByLabel("数据来源").selectOption("local");
+      await page.getByLabel("日期范围").selectOption("all");
+      await page
+        .getByRole("button", { name: "扫描 / 刷新", exact: true })
+        .click();
+      await expect(page.locator(".metric strong").first()).toHaveText("10 min");
+      await appendFile(
+        input,
+        [
+          {
+            timestamp: "2026-10-19T01:20:00Z",
+            type: "event_msg",
+            payload: { type: "task_started", turn_id: "after-scan" },
+          },
+          {
+            timestamp: "2026-10-19T01:30:00Z",
+            type: "event_msg",
+            payload: { type: "task_complete", turn_id: "after-scan" },
+          },
+        ]
+          .map((r) => JSON.stringify(r))
+          .join("\n") + "\n",
+      );
+      await page.route("**/api/analysis?**", async (route) => {
+        const snapshot = await route.fetch();
+        captured = true;
+        await gate;
+        await route.fulfill({ response: snapshot }).catch(() => {});
+      });
+      await page.getByLabel("自动刷新").selectOption("15");
+      await page.clock.runFor(15000);
+      await expect.poll(() => captured).toBe(true);
+      if (mode === "关闭")
+        await page.getByLabel("自动刷新").selectOption("off");
+      else
+        await page.evaluate(() => {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => "hidden",
+          });
+          document.dispatchEvent(new Event("visibilitychange"));
+        });
+      release();
+      await page.unrouteAll({ behavior: "wait" });
+      await expect(page.locator(".content")).toHaveAttribute(
+        "aria-busy",
+        "false",
+      );
+      await expect(page.locator(".metric strong").first()).toHaveText("10 min");
+      if (mode === "隐藏")
+        await page.evaluate(() => {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => "visible",
+          });
+          document.dispatchEvent(new Event("visibilitychange"));
+        });
+      await page
+        .getByRole("button", { name: "扫描 / 刷新", exact: true })
+        .click();
+      await expect(page.locator(".metric strong").first()).toHaveText("20 min");
+    } finally {
+      release();
+      await writeFile(input, original);
+    }
+  });

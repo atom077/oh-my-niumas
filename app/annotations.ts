@@ -13,11 +13,9 @@ function label(value: unknown, max: number): string {
     typeof value !== "string" ||
     value.length > max ||
     /[\x00-\x1f\x7f]/.test(value) ||
-    /(?:^|[\s:：=(\["'])\/|\/(?:Users|home|private|tmp|etc|var|Volumes)\/|~\/|[A-Za-z]:[\\/]|\\\\|file:\/\//.test(
-      value,
-    )
+    /[\\/]/.test(value.normalize("NFKC"))
   )
-    throw new AnnotationError("请使用不含绝对路径的短文本");
+    throw new AnnotationError("请使用不含斜杠或绝对路径的短文本");
   return value.trim();
 }
 

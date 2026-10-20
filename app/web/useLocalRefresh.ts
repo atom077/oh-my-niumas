@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function useLocalRefresh(
   local: boolean,
   ready: boolean,
+  reading: boolean,
   onUpdated: () => void,
+  onCancel: () => void,
 ) {
   const [period, setPeriod] = useState("off"),
     [busy, setBusy] = useState(false),
@@ -15,7 +17,8 @@ export function useLocalRefresh(
     request.current?.abort();
     request.current = null;
     setBusy(false);
-  }, []);
+    onCancel();
+  }, [onCancel]);
   useEffect(() => {
     if (!local) {
       setPeriod("off");
@@ -28,12 +31,13 @@ export function useLocalRefresh(
       const hide = document.visibilityState !== "visible";
       setHidden(hide);
       if (hide) cancel();
+      else if (local) onUpdated();
     };
     document.addEventListener("visibilitychange", visibility);
     return () => document.removeEventListener("visibilitychange", visibility);
-  }, [cancel]);
+  }, [cancel, local, onUpdated]);
   const refresh = useCallback(async () => {
-    if (!local || hidden || request.current) return;
+    if (!local || hidden || reading || request.current) return;
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
@@ -61,15 +65,16 @@ export function useLocalRefresh(
         setSettled((n) => n + 1);
       }
     }
-  }, [local, hidden, onUpdated]);
+  }, [local, hidden, reading, onUpdated]);
   useEffect(() => {
-    if (!local || !ready || hidden || busy || period === "off") return;
+    if (!local || !ready || hidden || busy || reading || period === "off")
+      return;
     const timer = window.setTimeout(
       () => void refresh(),
       Number(period) * 1000,
     );
     return () => window.clearTimeout(timer);
-  }, [local, ready, hidden, busy, period, settled, refresh]);
+  }, [local, ready, hidden, busy, reading, period, settled, refresh]);
   const changePeriod = (value: string) => {
     cancel();
     setPeriod(value);

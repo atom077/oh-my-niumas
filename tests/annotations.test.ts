@@ -141,6 +141,24 @@ test("HTTP 本地标记可合并、恢复、搜索并在刷新重启后保留原
       ).status,
       400,
     );
+    for (const note of [
+      "目录在/opt/company/private-project",
+      "路径（/opt/company/private-project）",
+      "目录在/opt",
+      "路径：C:\\private\\project",
+      "路径（／opt／company）",
+    ]) {
+      assert.equal(
+        (
+          await post("/api/annotations", {
+            action: "sessionNote",
+            sessionId: session.id,
+            note,
+          })
+        ).status,
+        400,
+      );
+    }
     assert.equal(
       (
         await post("/api/annotations", {
