@@ -32,6 +32,15 @@ export const time = (v: number) =>
     minute: "2-digit",
     hour12: false,
   }).format(v);
+const axisTime = (v: number, view: TimeWindow) => {
+  const day = (at: number) => Math.floor((at + 8 * 3_600_000) / 86_400_000);
+  const precise = view.to - view.from < 60_000;
+  return day(view.from) !== day(view.to)
+    ? viewTime(v, precise)
+    : precise
+      ? viewTime(v, true).slice(6)
+      : time(v);
+};
 export const duration = (v: number | null) =>
   v === null
     ? "N/A"
@@ -170,8 +179,6 @@ export function Timeline({
     const chart = chartRef.current;
     if (!chart) return;
     const items = timelineItems(data, showWait);
-    const crossDay =
-      viewTime(view.from).slice(0, 5) !== viewTime(view.to).slice(0, 5);
     chart.setOption({
       animation: false,
       grid: { left: 10, right: 25, top: 35, bottom: 75 },
@@ -190,12 +197,7 @@ export function Timeline({
         min: data.window.from,
         max: data.window.to,
         axisLabel: {
-          formatter: (v: number) =>
-            crossDay
-              ? viewTime(v)
-              : view.to - view.from < 60000
-                ? viewTime(v, true).slice(6)
-                : time(v),
+          formatter: (v: number) => axisTime(v, view),
           color: "#8a8d95",
           hideOverlap: true,
         },
@@ -317,7 +319,10 @@ export function Concurrency({
         type: "time",
         min: view.from,
         max: view.to,
-        axisLabel: { formatter: (v: number) => time(v) },
+        axisLabel: {
+          formatter: (v: number) => axisTime(v, view),
+          hideOverlap: true,
+        },
       },
       yAxis: {
         type: "value",

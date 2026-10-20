@@ -51,6 +51,16 @@ test("时间轴默认贴合活动，可选上午、自定义、缩放且不改�
 });
 
 test("图表支持 Ctrl 滚轮缩放和滑块拖动，同轴并发跟随范围", async ({ page }) => {
+  // Observe text painted through the browser canvas boundary, including both axes.
+  await page.addInitScript(() => {
+    const paintText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (...args) {
+      const labels = JSON.parse(this.canvas.dataset.paintedText ?? "[]");
+      labels.push(args[0]);
+      this.canvas.dataset.paintedText = JSON.stringify(labels);
+      return paintText.apply(this, args);
+    };
+  });
   await page.goto("/");
   await page.getByLabel("日期范围").selectOption("custom");
   await page.getByLabel("开始时间", { exact: true }).fill("2026-10-19T00:00");
@@ -98,6 +108,25 @@ test("图表支持 Ctrl 滚轮缩放和滑块拖动，同轴并发跟随范围",
   await page.getByRole("button", { name: "应用范围", exact: true }).click();
   await expect(display).toContainText("09:10:05");
   await expect(display).toContainText("09:10:20");
+  for (const chartName of [/多会话协作时间轴/, "AI 并发数随真实时间变化"]) {
+    const canvas = page
+      .getByRole("img", { name: chartName })
+      .locator("canvas")
+      .first();
+    await expect
+      .poll(() => canvas.getAttribute("data-painted-text"))
+      .toMatch(/09:10:\d{2}/);
+  }
+  await page.getByLabel("显示开始", { exact: true }).fill("2026-10-19T23:59");
+  await page.getByLabel("显示结束", { exact: true }).fill("2026-10-20T00:00");
+  await page.getByRole("button", { name: "应用范围", exact: true }).click();
+  const concurrentCanvas = page
+    .getByRole("img", { name: "AI 并发数随真实时间变化" })
+    .locator("canvas")
+    .first();
+  await expect
+    .poll(() => concurrentCanvas.getAttribute("data-painted-text"))
+    .toMatch(/10-19 23:59/);
 });
 
 test("跨日视窗有日期标识，手动刷新保留范围，换筛选重新贴合", async ({
