@@ -13,12 +13,20 @@ import { useLocalRefresh } from "./useLocalRefresh";
 import type { ImportStatus } from "../importer";
 
 type Page = "overview" | "projects" | "sessions" | "timeline";
+type Source = "demo" | "local";
 type Response = Analysis & {
-  source: "demo" | "local";
+  source: Source;
   importStatus: ImportStatus | null;
   projectOptions: Analysis["projects"];
   originalProjects: OriginalProject[];
 };
+/** Mirrors `availability()` in the importer. */
+interface LocalAvailability {
+  ready: boolean;
+  cached: boolean;
+  sessions: number;
+  lastAt: number | null;
+}
 const pages: { id: Page; icon: string; name: string }[] = [
   { id: "overview", icon: "◫", name: "总览" },
   { id: "projects", icon: "▧", name: "项目" },
@@ -39,6 +47,33 @@ const today = () =>
     day: "2-digit",
   }).format(Date.now());
 const midnight = (day: string) => Date.parse(day + "T00:00:00+08:00");
+const shortDate = (at: number) =>
+  new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(at);
+
+/** Narrowest preset that still contains the latest local activity, so the first screen is never empty. */
+function rangeFor(lastAt: number | null): string {
+  if (lastAt === null) return "all";
+  const start = midnight(today());
+  if (lastAt >= start) return "today";
+  if (lastAt >= start - 6 * 86_400_000) return "7";
+  if (lastAt >= start - 29 * 86_400_000) return "30";
+  return "all";
+}
+const getAvailability = async (): Promise<LocalAvailability> => {
+  const r = await fetch("/api/sources");
+  if (!r.ok) throw Error("无法检测本机数据");
+  return (await r.json()).local;
+};
+/** `?source=demo|local` pins the source, e.g. for bookmarks and reproducible screenshots. */
+const pinnedSource = (): Source | null => {
+  const v = new URLSearchParams(location.search).get("source");
+  return v === "demo" || v === "local" ? v : null;
+};
 
 export function App() {
   const [page, setPage] = useState<Page>("overview"),
@@ -47,14 +82,19 @@ export function App() {
     [search, setSearch] = useState(""),
     [selected, setSelected] = useState(""),
     [error, setError] = useState("");
-  const [source, setSource] = useState("demo"),
-    [scenario, setScenario] = useState("parallel"),
+  // Null until local availability is known, so the demo never flashes before local data.
+  const [source, setSource] = useState<Source | null>(() =>
+    pinnedSource() === "demo" ? "demo" : null,
+  );
+  const [scenario, setScenario] = useState("parallel"),
     [range, setRange] = useState("all"),
     [status, setStatus] = useState("");
   const [from, setFrom] = useState(today() + "T00:00"),
     [to, setTo] = useState(today() + "T23:59");
   const [reload, setReload] = useState(0),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(false),
+    [preparing, setPreparing] = useState(false);
+  const lastLocalAt = useRef<number | null>(null);
   const onUpdated = useCallback(() => setReload((n) => n + 1), []);
   const analysisRequest = useRef<AbortController | null>(null);
   const cancelAnalysis = useCallback(() => {
@@ -72,6 +112,36 @@ export function App() {
   const [showWait, setShowWait] = useState(true),
     [collapsed, setCollapsed] = useState<string[]>([]);
   useEffect(() => {
+    if (source !== null) return;
+    let cancelled = false;
+    const pinned = pinnedSource();
+    (async () => {
+      let local = await getAvailability();
+      // A cache from an earlier scan survives restarts; rebuild it once (mostly cache hits) before showing.
+      if (!local.ready && local.cached) {
+        setPreparing(true);
+        await fetch("/api/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        local = await getAvailability();
+      }
+      if (cancelled) return;
+      lastLocalAt.current = local.lastAt;
+      if (local.ready || pinned === "local") {
+        setRange(local.ready ? rangeFor(local.lastAt) : "today");
+        setSource("local");
+      } else setSource("demo");
+    })()
+      .catch(() => !cancelled && setSource(pinned ?? "demo"))
+      .finally(() => !cancelled && setPreparing(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+  useEffect(() => {
+    if (!source) return;
     const controller = new AbortController();
     analysisRequest.current = controller;
     const params = new URLSearchParams({
@@ -196,7 +266,14 @@ export function App() {
     (window: Analysis["window"]) => setViewChoice({ mode: "custom", window }),
     [],
   );
-  const date = new Date(data?.window.from ?? Date.now());
+  const importStatus = data?.importStatus;
+  // Window end is exclusive, so the last covered day is one millisecond earlier.
+  const dateLabel = data
+    ? shortDate(data.window.from) ===
+      shortDate(data.window.to - 1)
+      ? shortDate(data.window.from)
+      : `${shortDate(data.window.from)} — ${shortDate(data.window.to - 1)}`
+    : "";
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -208,16 +285,11 @@ export function App() {
             nav("overview");
           }}
         >
-          <div className="brand-mark">
-            牛<span>↗</span>
-          </div>
+          <div className="brand-mark">牛</div>
           <div>
-            oh-my-牛马s<small>THE AI AGENT HERDING DASHBOARD</small>
+            oh-my-牛马s<small>AI 会话协作看板</small>
           </div>
         </a>
-        <div className="workspace-label">
-          MY WORKSPACE <span>LOCAL</span>
-        </div>
         <nav>
           {pages.map((p) => (
             <button
@@ -230,36 +302,20 @@ export function App() {
                 {p.icon}
               </span>
               {p.name}
-              <span className="nav-arrow" aria-hidden="true">
-                ↗
-              </span>
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="herd-sketch" aria-hidden="true">
-            🐂 <span>🐎</span>
-          </div>
           <strong>
             代码不一定我写，
             <br />
             进度一定我催。
           </strong>
           <p>多会话并行，统一查看。</p>
-          <small>v0.1 / STOP CODING. START HERDING.</small>
         </div>
       </aside>
       <main>
-        <header className="topbar">
-          <div className="breadcrumb">
-            我的工作台 <span>/</span> {title.name}
-          </div>
-          <div className="top-right">
-            <span className="status-dot" />
-            本机运行<span className="avatar">牧</span>
-          </div>
-        </header>
-        <div className="content" aria-busy={loading}>
+        <div className="content" aria-busy={loading || preparing}>
           <div className="page-heading">
             <div>
               <h1>
@@ -268,48 +324,32 @@ export function App() {
               </h1>
               <p>
                 {page === "overview"
-                  ? "从一次派活，到多线并行。把每一段协作，看得清清楚楚。"
+                  ? "从一次派活，到多线并行，把每一段协作看清楚。"
                   : page === "timeline"
-                    ? "在同一条时间轴上查看各会话的执行、等待与输入事件。"
+                    ? "同一条时间轴上，查看各会话的执行、等待与输入。"
                     : page === "projects"
                       ? "按项目查看会话、执行工作量和 Token 用量。"
-                      : "一次会话，多轮协作。执行多久，跨度多久，分别说清楚。"}
+                      : "一次会话，多轮协作；执行多久、跨度多久，分别说清楚。"}
               </p>
             </div>
-            <div className="date-stamp">
-              <b>
-                {new Intl.DateTimeFormat("en", {
-                  timeZone: "Asia/Shanghai",
-                  day: "2-digit",
-                }).format(date)}
-              </b>
-              <span>
-                {new Intl.DateTimeFormat("en", {
-                  timeZone: "Asia/Shanghai",
-                  month: "short",
-                  year: "numeric",
-                })
-                  .format(date)
-                  .toUpperCase()}
-                <br />
-                {range === "all" ? "ACTIVITY RANGE" : "SELECTED RANGE"}
-              </span>
-            </div>
+            {data && <span className="date-chip">{dateLabel}</span>}
           </div>
           <div className="filterbar">
             <select
               aria-label="数据来源"
-              className="source-select"
-              value={source}
+              className={"source-select " + (source ?? "")}
+              value={source ?? "local"}
+              disabled={!source}
               onChange={(e) => {
-                setSource(e.target.value);
+                const next = e.target.value as Source;
+                setSource(next);
                 reset();
-                if (e.target.value === "local") setRange("today");
+                if (next === "local") setRange(rangeFor(lastLocalAt.current));
                 setData(null);
               }}
             >
-              <option value="demo">● 合成演示数据</option>
-              <option value="local">● 本机只读数据</option>
+              <option value="local">本机数据</option>
+              <option value="demo">演示数据</option>
             </select>
             {source === "demo" && (
               <select
@@ -357,12 +397,11 @@ export function App() {
             <input
               aria-label="搜索会话"
               value={search}
-              placeholder="⌕ 搜索会话"
+              placeholder="搜索会话"
               onChange={(e) => setSearch(e.target.value)}
             />
-            <span className="timezone">UTC+08:00 · 上海</span>
             {source === "local" && (
-              <>
+              <div className="refresh-group">
                 <button
                   className="refresh-button"
                   disabled={live.busy || loading}
@@ -373,87 +412,103 @@ export function App() {
                 <select
                   aria-label="自动刷新"
                   value={live.period}
-                  disabled={!data?.importStatus?.updatedAt}
+                  disabled={!importStatus?.updatedAt}
                   onChange={(e) => live.changePeriod(e.target.value)}
                 >
-                  <option value="off">自动刷新：关闭</option>
+                  <option value="off">自动刷新：关</option>
                   <option value="15">每 15 秒</option>
                   <option value="30">每 30 秒</option>
                   <option value="60">每 60 秒</option>
                 </select>
-              </>
+              </div>
             )}
           </div>
           {range === "custom" && (
             <div className="date-controls">
               <label>
-                开始时间{" "}
+                开始时间
                 <input
                   type="datetime-local"
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
                 />
               </label>
-              <span>→</span>
+              <span aria-hidden="true">→</span>
               <label>
-                结束时间{" "}
+                结束时间
                 <input
                   type="datetime-local"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
                 />
               </label>
-              <span>Asia/Shanghai · 结束边界不包含</span>
+              <small>北京时间 · 不含结束时刻</small>
             </div>
           )}
           {error && (
             <div role="alert" className="notice error">
-              {error}{" "}
+              {error}
               <button onClick={() => setReload((n) => n + 1)}>重试</button>
             </div>
           )}
           {source === "local" && live.error && (
             <div role="alert" className="notice error">
-              {live.error}{" "}
+              {live.error}
               <button disabled={live.busy} onClick={() => void live.refresh()}>
                 重试刷新
               </button>
             </div>
           )}
           {!data ? (
-            <div className="empty">正在加载数据…</div>
+            <div className="empty loading">
+              {preparing ? "正在读取本机数据…" : "正在加载数据…"}
+            </div>
           ) : (
             <>
-              <div className="demo-note">
-                {source === "demo" ? "DEMO" : "LOCAL"}
-                <span>
-                  {source === "demo"
-                    ? "这些数字来自可复现的合成 Fixture，并非你的真实使用记录。"
-                    : "显示 Codex 会话标题、项目目录名与手动标记；原始对话和完整路径不进入浏览器。"}
+              <div className="source-strip">
+                <span className={"source-pill " + data.source}>
+                  {data.source === "demo" ? "演示数据" : "本机只读"}
                 </span>
-                <button className="note-right" onClick={reset}>
-                  清除筛选 ↺
-                </button>
-              </div>
-              {source === "local" && (
-                <div className="import-summary">
-                  <div className="refresh-status" role="status">
-                    {data.importStatus?.updatedAt
-                      ? `最近刷新 ${time(Date.parse(data.importStatus.updatedAt))} · 耗时 ${data.importStatus.durationMs} ms · 新增 ${data.importStatus.addedFiles} 日志 / 更新 ${data.importStatus.changedFiles} 日志 / 移除 ${data.importStatus.removedFiles} 日志 · 新增 ${data.importStatus.newSessions} 会话 / 新增 ${data.importStatus.newTurns} 轮`
-                      : "先手动扫描，再选择自动刷新频率"}
+                {data.source === "demo" ? (
+                  <span>合成样例，并非你的真实使用记录。</span>
+                ) : (
+                  <span className="refresh-status" role="status">
+                    {importStatus?.updatedAt
+                      ? `最近刷新 ${time(Date.parse(importStatus.updatedAt))} · ${importStatus.sessions} 个会话 · 新增 ${importStatus.newTurns} 轮`
+                      : "尚未导入本机日志，点击“扫描 / 刷新”开始"}
                     {live.period !== "off" &&
                       (live.hidden
                         ? " · 页面隐藏，自动刷新暂停"
                         : live.busy
                           ? " · 正在只读扫描"
-                          : ` · 完成后间隔 ${live.period} 秒刷新`)}
-                  </div>
-                  {data.importStatus?.updatedAt
-                    ? `${data.importStatus.files} 个日志 · ${data.importStatus.readFiles} 个重读 · ${data.importStatus.cachedFiles} 个缓存 · 截断 ${data.importStatus.cappedFiles} 个 · 跳过 ${data.importStatus.skippedLines} 行`
-                    : "尚未导入本机日志，点击“扫描 / 刷新”开始。"}
-                  <span>真实发送时间及父子归属仍有覆盖限制。</span>
-                </div>
-              )}
+                          : ` · 每 ${live.period} 秒刷新`)}
+                  </span>
+                )}
+                {data.source === "local" && (
+                  <details className="import-summary">
+                    <summary>扫描详情</summary>
+                    <p>
+                      {importStatus?.updatedAt
+                        ? `${importStatus.files} 个日志（重读 ${importStatus.readFiles} · 缓存 ${importStatus.cachedFiles} · 截断 ${importStatus.cappedFiles}）· 跳过 ${importStatus.skippedLines} 行 · 耗时 ${importStatus.durationMs} ms`
+                        : "尚未扫描。"}
+                    </p>
+                    {importStatus?.updatedAt && (
+                      <p>
+                        本次新增 {importStatus.addedFiles} 个、更新{" "}
+                        {importStatus.changedFiles} 个、移除{" "}
+                        {importStatus.removedFiles} 个日志；新增{" "}
+                        {importStatus.newSessions} 个会话。
+                      </p>
+                    )}
+                    <p>
+                      页面只显示会话标题、项目目录名和手动标记，原始对话与完整路径不进入浏览器。真实发送时间及父子归属仍有覆盖限制。
+                    </p>
+                  </details>
+                )}
+                <button className="ghost-button note-right" onClick={reset}>
+                  清除筛选 ↺
+                </button>
+              </div>
               {(page === "overview" || page === "timeline") && (
                 <div className="metrics">
                   <Metric
@@ -494,12 +549,7 @@ export function App() {
                 <>
                   <section className="panel">
                     <div className="panel-heading">
-                      <div>
-                        <span className="section-kicker">
-                          01 / LIVE FROM THE SITE
-                        </span>
-                        <h2>协作时间轴</h2>
-                      </div>
+                      <h2>协作时间轴</h2>
                       <button
                         className="text-button"
                         onClick={() => nav("timeline")}
@@ -514,7 +564,6 @@ export function App() {
                       choice={viewChoice}
                       onChange={setViewChoice}
                     />
-                    <Legend />
                     <Timeline
                       data={data}
                       onSession={openSession}
@@ -524,7 +573,6 @@ export function App() {
                   </section>
                   <div className="recent-heading">
                     <h2>最近完成的会话</h2>
-                    <span>每一次完成，都有迹可循</span>
                   </div>
                   <div className="activity-grid">
                     {data.sessions
@@ -556,12 +604,10 @@ export function App() {
               {page === "projects" && (
                 <section className="panel">
                   <div className="panel-heading">
-                    <div>
-                      <span className="section-kicker">
-                        PROJECTS / {data.projects.length} SITES
-                      </span>
-                      <h2>项目分析</h2>
-                    </div>
+                    <h2>项目分析</h2>
+                    <span className="mini-label">
+                      {data.projects.length} 个项目
+                    </span>
                   </div>
                   {source === "local" && (
                     <ProjectLabels
@@ -585,7 +631,9 @@ export function App() {
                         {data.projects.map((p, i) => (
                           <tr key={p.id}>
                             <td>
-                              <span className={"project-icon p" + i}>▧</span>
+                              <span className={"project-icon p" + (i % 2)}>
+                                ▧
+                              </span>
                               <b>{p.name}</b>
                             </td>
                             <td>{p.sessionCount}</td>
@@ -618,19 +666,18 @@ export function App() {
               {page === "sessions" && (
                 <section className="panel">
                   <div className="panel-heading">
-                    <div>
-                      <span className="section-kicker">
-                        SESSIONS / A CLOSER LOOK
-                      </span>
-                      <h2>{session ? session.name : "会话"}</h2>
-                    </div>
-                    {session && (
+                    <h2>{session ? session.name : "会话"}</h2>
+                    {session ? (
                       <button
                         className="text-button"
                         onClick={() => setSelected("")}
                       >
                         ← 返回会话列表
                       </button>
+                    ) : (
+                      <span className="mini-label">
+                        {data.sessions.length} 个会话
+                      </span>
                     )}
                   </div>
                   {session ? (
@@ -702,12 +749,7 @@ export function App() {
               {page === "timeline" && (
                 <section className="panel timeline-panel">
                   <div className="panel-heading">
-                    <div>
-                      <span className="section-kicker">
-                        TIMELINE / PARALLEL IS NORMAL
-                      </span>
-                      <h2>多会话时间轴</h2>
-                    </div>
+                    <h2>多会话时间轴</h2>
                     <span className="mini-label">
                       峰值 {metrics!.peakParallelism} 路并行
                     </span>
@@ -725,7 +767,7 @@ export function App() {
                         </option>
                       ))}
                     </select>
-                    <label>
+                    <label className="check">
                       <input
                         type="checkbox"
                         checked={showWait}
@@ -733,21 +775,26 @@ export function App() {
                       />
                       显示闭合等待
                     </label>
-                    {data.projects.map((p) => (
-                      <button
-                        key={p.id}
-                        aria-expanded={!collapsed.includes(p.id)}
-                        onClick={() =>
-                          setCollapsed((v) =>
-                            v.includes(p.id)
-                              ? v.filter((i) => i !== p.id)
-                              : [...v, p.id],
-                          )
-                        }
-                      >
-                        {collapsed.includes(p.id) ? "▸" : "▾"} {p.name}
-                      </button>
-                    ))}
+                    {data.projects.length > 1 && (
+                      <span className="filter-divider" />
+                    )}
+                    {data.projects.length > 1 &&
+                      data.projects.map((p) => (
+                        <button
+                          key={p.id}
+                          className="chip"
+                          aria-pressed={!collapsed.includes(p.id)}
+                          onClick={() =>
+                            setCollapsed((v) =>
+                              v.includes(p.id)
+                                ? v.filter((i) => i !== p.id)
+                                : [...v, p.id],
+                            )
+                          }
+                        >
+                          {p.name}
+                        </button>
+                      ))}
                   </div>
                   <TimelineControls
                     key={viewScope}
@@ -756,7 +803,6 @@ export function App() {
                     choice={viewChoice}
                     onChange={setViewChoice}
                   />
-                  <Legend />
                   <Timeline
                     data={visibleData!}
                     onSession={openSession}
@@ -765,14 +811,14 @@ export function App() {
                     onViewChange={changeView}
                   />
                   <details
+                    className="concurrency"
                     onToggle={(e) => {
                       if (e.currentTarget.open)
                         window.dispatchEvent(new Event("resize"));
                     }}
                   >
-                    <summary>
-                      查看同轴并发曲线 · 平均倍数只针对活跃覆盖时段
-                    </summary>
+                    <summary>同轴并发曲线</summary>
+                    <p>平均倍数只针对活跃覆盖时段。</p>
                     <Concurrency data={data} view={axisWindow!} />
                   </details>
                 </section>
@@ -800,7 +846,7 @@ export function App() {
                 </p>
               </details>
               <footer>
-                <span>🐮 以前我是牛马，现在我是牛马的项目经理。</span>
+                <span>以前我是牛马，现在我是牛马的项目经理。</span>
                 <span>等待 ≠ 人工投入 · 跨度 ≠ 执行</span>
               </footer>
             </>
@@ -822,12 +868,7 @@ function Metric({
 }) {
   return (
     <div className="metric">
-      <div className="metric-label">
-        {label}
-        <span title={note} aria-hidden="true">
-          ↗
-        </span>
-      </div>
+      <div className="metric-label">{label}</div>
       <strong>{value}</strong>
       <small>{note}</small>
     </div>
@@ -838,18 +879,6 @@ function Empty() {
     <div className="empty">
       <h3>没有符合筛选的记录</h3>
       <p>试试清除搜索或切换项目。</p>
-    </div>
-  );
-}
-function Legend() {
-  return (
-    <div className="chart-legend">
-      <span className="legend-dot" />
-      AI 执行
-      <span className="legend-dot waiting" />
-      闭合等待<span className="input-diamond">◆</span>输入
-      <span className="unknown-mark">?</span>未知
-      <span className="legend-caption">重叠，是并行协作的正常状态</span>
     </div>
   );
 }
@@ -938,13 +967,13 @@ function SessionDetail({
             (s.titleSource === "index"
               ? "会话标题来自 Codex 会话索引。 "
               : "索引中暂无该会话标题，显示为未命名会话。 ")}
-          来源 {data.source === "demo" ? "合成 Fixture" : "本机只读白名单"}；
+          来源 {data.source === "demo" ? "合成样例" : "本机只读白名单"}；
           {s.turns.reduce((a, t) => a + t.evidence.length, 0)} 条边界证据。Token
           路径：{s.tokenMode}。日志版本：{s.versions.join(" / ") || "未记录"}。
         </p>
         <p>
           {s.tokenMode === "record"
-            ? `Input ${tokens(usage.reduce((a, u) => a + u.input, 0))} / Cached ${tokens(usage.every((u) => u.cached !== null) ? usage.reduce((a, u) => a + (u.cached ?? 0), 0) : null)}（Input 子集）/ Output ${tokens(usage.reduce((a, u) => a + u.output, 0))} / Reasoning ${tokens(usage.every((u) => u.reasoning !== null) ? usage.reduce((a, u) => a + (u.reasoning ?? 0), 0) : null)}（Output 子集）`
+            ? `输入 ${tokens(usage.reduce((a, u) => a + u.input, 0))} / 缓存 ${tokens(usage.every((u) => u.cached !== null) ? usage.reduce((a, u) => a + (u.cached ?? 0), 0) : null)}（输入子集）/ 输出 ${tokens(usage.reduce((a, u) => a + u.output, 0))} / 推理 ${tokens(usage.every((u) => u.reasoning !== null) ? usage.reduce((a, u) => a + (u.reasoning ?? 0), 0) : null)}（输出子集）`
             : "分项或轮次 Token 不足以确定，显示 N/A。"}
         </p>
         <ul>

@@ -14,7 +14,7 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
     if (new URL(r.url()).pathname === "/api/refresh") scans++;
   });
   try {
-    await page.goto("/");
+    await page.goto("/?source=demo");
     await page.getByLabel("数据来源").selectOption("local");
     await expect(page.getByLabel("自动刷新")).toBeVisible();
     await expect(page.getByLabel("自动刷新")).toHaveValue("off");
@@ -107,7 +107,7 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
 
 test("慢刷新不重叠，切换数据源取消过期结果", async ({ page }) => {
   await page.clock.install();
-  await page.goto("/");
+  await page.goto("/?source=demo");
   await page.getByLabel("数据来源").selectOption("local");
   await page.getByRole("button", { name: "扫描 / 刷新", exact: true }).click();
   await expect(
@@ -153,7 +153,7 @@ for (const mode of ["关闭", "隐藏"])
     });
     try {
       await page.clock.install();
-      await page.goto("/");
+      await page.goto("/?source=demo");
       await page.getByLabel("数据来源").selectOption("local");
       await page.getByLabel("日期范围").selectOption("all");
       await page
@@ -234,7 +234,7 @@ test("Demo 初次加载时隐藏再显示仍能得到分析结果", async ({ pag
     await route.fulfill({ response: snapshot }).catch(() => {});
   });
   try {
-    await page.goto("/");
+    await page.goto("/?source=demo");
     await expect.poll(() => captured).toBe(true);
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", {

@@ -180,9 +180,22 @@ export async function createLogStore(root: string, dbPath: string) {
         .all()
         .map((row) => String(row.file_key)),
     );
-    const previousSessions = new Set(dataset.sessions.map((s) => s.id));
+    // After a restart the in-memory dataset is empty; the cached projections are the last known state.
+    const baseline =
+      dataset.sessions.length || !previousFiles.size
+        ? dataset
+        : normalizeSources(
+            db
+              .prepare("SELECT file_key, projection FROM source_cache")
+              .all()
+              .map((row) => ({
+                alias: String(row.file_key),
+                text: String(row.projection),
+              })),
+          );
+    const previousSessions = new Set(baseline.sessions.map((s) => s.id));
     const previousTurns = new Set(
-      dataset.sessions.flatMap((s) => s.turns.map((t) => `${s.id}:${t.id}`)),
+      baseline.sessions.flatMap((s) => s.turns.map((t) => `${s.id}:${t.id}`)),
     );
     const found = await discover(root),
       sources: Source[] = [],
@@ -336,6 +349,20 @@ export async function createLogStore(root: string, dbPath: string) {
     getProjects: () => annotations.projects(dataset),
     annotate: (value: unknown) => annotations.update(value, dataset),
     getStatus: () => structuredClone(status),
+    /** Lets the page prefer local data, including a cache left by an earlier scan before restart. */
+    availability: () => {
+      const lastAt = dataset.sessions.reduce<number | null>(
+        (max, s) =>
+          s.lastAt !== null && (max === null || s.lastAt > max) ? s.lastAt : max,
+        null,
+      );
+      return {
+        ready: status.updatedAt !== null && dataset.sessions.length > 0,
+        cached: Boolean(db.prepare("SELECT 1 FROM source_cache LIMIT 1").get()),
+        sessions: dataset.sessions.length,
+        lastAt,
+      };
+    },
     close: () => db.close(),
   };
 }

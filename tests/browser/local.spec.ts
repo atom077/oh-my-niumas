@@ -16,7 +16,7 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
       .replaceAll("/synthetic/http-demo", "/synthetic/second"),
   );
   try {
-    await page.goto("/");
+    await page.goto("/?source=demo");
     await page.getByLabel("数据来源").selectOption("local");
     await page.getByLabel("日期范围").selectOption("all");
     await page
@@ -74,4 +74,18 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
   } finally {
     await rm(second, { force: true });
   }
+});
+
+test("扫描过本机日志后，默认打开本机数据", async ({ page }) => {
+  await page.goto("/?source=local");
+  await page.getByLabel("日期范围").selectOption("all");
+  await page.getByRole("button", { name: "扫描 / 刷新", exact: true }).click();
+  await expect(page.locator(".refresh-status")).toContainText("最近刷新");
+  await page.goto("/");
+  await expect(page.getByLabel("数据来源")).toHaveValue("local");
+  await expect(page.locator(".source-pill")).toHaveText("本机只读");
+  await expect(page.locator(".fixed-names")).toContainText("验证日志导入");
+  await expect(page.locator(".metric strong").first()).toHaveText("10 min");
+  await page.getByLabel("数据来源").selectOption("demo");
+  await expect(page.locator(".metric strong").first()).toHaveText("100 min");
 });

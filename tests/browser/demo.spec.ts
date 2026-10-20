@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 test("四页导航、项目筛选与会话下钻保持一致", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?source=demo");
   await expect(
     page.getByRole("heading", { name: "AI 会话协作总览." }),
   ).toBeVisible();
@@ -33,7 +33,7 @@ test("四页导航、项目筛选与会话下钻保持一致", async ({ page }) 
     page.getByRole("img", { name: /多会话协作时间轴/ }),
   ).toBeVisible();
   await page.getByRole("combobox", { name: "项目筛选" }).selectOption("");
-  await expect(page.locator(".fixed-names button")).toHaveCount(3);
+  await expect(page.locator(".fixed-names .lane-name")).toHaveCount(3);
   await page.screenshot({
     path: "docs/screenshots/timeline.png",
     fullPage: true,
@@ -43,7 +43,7 @@ test("四页导航、项目筛选与会话下钻保持一致", async ({ page }) 
 });
 
 test("本机只读入口可以导入隔离日志并切回合成数据", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?source=demo");
   await page.getByRole("combobox", { name: "数据来源" }).selectOption("local");
   await expect(page.getByLabel("自动刷新")).toHaveValue("off");
   await expect(page.getByLabel("自动刷新")).toBeDisabled();
@@ -67,7 +67,7 @@ test("本机只读入口可以导入隔离日志并切回合成数据", async ({
 });
 
 test("边界样例能按上海日期裁切，并显式展示缺失状态", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?source=demo");
   await page
     .getByRole("combobox", { name: "演示场景" })
     .selectOption("boundaries");

@@ -82,6 +82,11 @@ export async function createApp(
         req.resume();
         return json(200, await store.refresh());
       }
+      if (url.pathname === "/api/sources") {
+        if (req.method !== "GET")
+          return json(405, { error: "请使用 GET 查询" });
+        return json(200, { local: store.availability() });
+      }
       if (url.pathname === "/api/analysis") {
         if (req.method !== "GET")
           return json(405, { error: "请使用 GET 查询" });

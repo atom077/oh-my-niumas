@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("时间轴默认贴合活动，可选上午、自定义、缩放且不改变统计", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?source=demo");
   await page.getByLabel("日期范围").selectOption("custom");
   await page.getByLabel("开始时间", { exact: true }).fill("2026-10-19T00:00");
   await page.getByLabel("结束时间", { exact: true }).fill("2026-10-20T00:00");
@@ -23,6 +23,7 @@ test("时间轴默认贴合活动，可选上午、自定义、缩放且不改�
   await expect(
     page.getByText("当前显示范围没有活动", { exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "自定义范围", exact: true }).click();
   await page.getByLabel("显示开始", { exact: true }).fill("2026-10-19T09:10");
   await page.getByLabel("显示结束", { exact: true }).fill("2026-10-19T09:30");
   await page.getByRole("button", { name: "应用范围", exact: true }).click();
@@ -36,6 +37,7 @@ test("时间轴默认贴合活动，可选上午、自定义、缩放且不改�
     .getByRole("button", { name: "展开完整时间轴 ↗", exact: true })
     .click();
   await expect(display).toContainText("09:15");
+  await page.getByRole("button", { name: "自定义范围", exact: true }).click();
   await page.getByLabel("显示结束", { exact: true }).fill("2026-10-19T09:00");
   await page.getByRole("button", { name: "应用范围", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("结束时间");
@@ -61,7 +63,7 @@ test("图表支持 Ctrl 滚轮缩放和滑块拖动，同轴并发跟随范围",
       return paintText.apply(this, args);
     };
   });
-  await page.goto("/");
+  await page.goto("/?source=demo");
   await page.getByLabel("日期范围").selectOption("custom");
   await page.getByLabel("开始时间", { exact: true }).fill("2026-10-19T00:00");
   await page.getByLabel("结束时间", { exact: true }).fill("2026-10-20T00:00");
@@ -94,11 +96,12 @@ test("图表支持 Ctrl 滚轮缩放和滑块拖动，同轴并发跟随范围",
   await expect(page.locator(".metric strong").first()).toHaveText("100 min");
   await page.getByRole("button", { name: "时间轴", exact: true }).click();
   await page
-    .getByText("查看同轴并发曲线 · 平均倍数只针对活跃覆盖时段", { exact: true })
+    .getByText("同轴并发曲线", { exact: true })
     .click();
   await expect(
     page.getByRole("img", { name: "AI 并发数随真实时间变化" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "自定义范围", exact: true }).click();
   await page
     .getByLabel("显示开始", { exact: true })
     .fill("2026-10-19T09:10:05");
@@ -133,7 +136,7 @@ test("跨日视窗有日期标识，手动刷新保留范围，换筛选重新�
   page,
 }) => {
   await page.clock.install();
-  await page.goto("/");
+  await page.goto("/?source=demo");
   await page.getByLabel("演示场景").selectOption("boundaries");
   await page.getByLabel("搜索会话").fill("跨午夜");
   await page.getByLabel("日期范围").selectOption("custom");
@@ -149,6 +152,7 @@ test("跨日视窗有日期标识，手动刷新保留范围，换筛选重新�
   await page.getByLabel("日期范围").selectOption("all");
   await page.getByRole("button", { name: "扫描 / 刷新", exact: true }).click();
   await expect(display).toContainText("09:10");
+  await page.getByRole("button", { name: "自定义范围", exact: true }).click();
   await page.getByLabel("显示开始", { exact: true }).fill("2026-10-19T09:02");
   await page.getByLabel("显示结束", { exact: true }).fill("2026-10-19T09:08");
   await page.getByRole("button", { name: "应用范围", exact: true }).click();
@@ -171,4 +175,37 @@ test("跨日视窗有日期标识，手动刷新保留范围，换筛选重新�
   await page.getByLabel("搜索会话").fill("验证日志导入");
   await expect(display).toContainText("09:00");
   await expect(display).toContainText("09:10");
+});
+
+test("时间轴会话可展开为按轮次的阶梯，并支持全部展开与收起", async ({
+  page,
+}) => {
+  await page.goto("/?source=demo");
+  await page.getByRole("button", { name: "时间轴", exact: true }).click();
+  const chart = page.getByRole("img", { name: /多会话协作时间轴/ });
+  const before = (await chart.boundingBox())!.height;
+  const toggle = page.locator("button.lane-toggle").first();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const steps = page.locator(".turn-lane");
+  await expect(steps).toHaveCount(2);
+  await expect(steps.first()).toContainText("第 1 轮");
+  await expect(steps.nth(1)).toContainText("第 2 轮");
+  // Each step is indented further, mirroring the staircase in the chart.
+  const indent = (i: number) =>
+    steps.nth(i).evaluate((e) => parseFloat(getComputedStyle(e).paddingLeft));
+  expect(await indent(1)).toBeGreaterThan(await indent(0));
+  await expect.poll(async () => (await chart.boundingBox())!.height).toBe(
+    before + 2 * 34,
+  );
+  await page.screenshot({
+    path: "docs/screenshots/timeline-stairs.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "收起全部轮次", exact: true }).click();
+  await expect(steps).toHaveCount(0);
+  await page.getByRole("button", { name: "展开全部轮次", exact: true }).click();
+  await expect(steps).not.toHaveCount(0);
+  await expect(page.locator(".metric strong").first()).toHaveText("100 min");
 });

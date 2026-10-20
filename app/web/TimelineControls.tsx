@@ -9,6 +9,13 @@ import {
   type ViewChoice,
 } from "./timeline-window";
 
+const presets = [
+  { mode: "fit", name: "贴合活动" },
+  { mode: "full", name: "完整日期范围" },
+  { mode: "morning", name: "上午" },
+  { mode: "afternoon", name: "下午" },
+] as const;
+
 export function TimelineControls({
   data,
   view,
@@ -23,7 +30,8 @@ export function TimelineControls({
   const [from, setFrom] = useState(localDateTime(view.from)),
     [to, setTo] = useState(localDateTime(view.to));
   const [dirty, setDirty] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [custom, setCustom] = useState(false);
   useEffect(() => {
     if (!dirty) {
       setFrom(localDateTime(view.from));
@@ -47,113 +55,114 @@ export function TimelineControls({
       ),
     });
   };
+  const precise = view.to - view.from < 60000;
   return (
     <div className="timeline-range-controls">
-      <div className="range-presets" role="group" aria-label="时间轴范围预设">
-        <button
-          aria-pressed={choice.mode === "fit"}
-          onClick={() => choose({ mode: "fit" })}
+      <div className="range-bar">
+        <div className="segmented" role="group" aria-label="时间轴范围预设">
+          {presets.map((p) => (
+            <button
+              key={p.mode}
+              aria-pressed={choice.mode === p.mode}
+              disabled={
+                (p.mode === "morning" || p.mode === "afternoon") &&
+                !dayPreset(data.window, p.mode)
+              }
+              onClick={() => choose({ mode: p.mode })}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <div className="segmented" role="group" aria-label="缩放">
+          <button
+            onClick={() => zoom(0.5)}
+            disabled={
+              view.to - view.from <=
+              Math.min(1000, data.window.to - data.window.from)
+            }
+          >
+            放大
+          </button>
+          <button
+            onClick={() => zoom(2)}
+            disabled={view.to - view.from >= data.window.to - data.window.from}
+          >
+            缩小
+          </button>
+        </div>
+        <output
+          aria-label="时间轴显示范围"
+          title="仅调整时间轴显示，统计指标仍按顶部日期范围计算。拖动下方滑块平移，Ctrl + 滚轮缩放。"
         >
-          贴合活动
-        </button>
+          {viewTime(view.from, precise)} — {viewTime(view.to, precise)}
+        </output>
         <button
-          aria-pressed={choice.mode === "full"}
-          onClick={() => choose({ mode: "full" })}
+          className={custom ? "ghost-button active" : "ghost-button"}
+          aria-expanded={custom}
+          onClick={() => setCustom((v) => !v)}
         >
-          完整日期范围
-        </button>
-        <button
-          aria-pressed={choice.mode === "morning"}
-          disabled={!dayPreset(data.window, "morning")}
-          onClick={() => choose({ mode: "morning" })}
-        >
-          上午
-        </button>
-        <button
-          aria-pressed={choice.mode === "afternoon"}
-          disabled={!dayPreset(data.window, "afternoon")}
-          onClick={() => choose({ mode: "afternoon" })}
-        >
-          下午
-        </button>
-        <button
-          onClick={() => zoom(0.5)}
-          disabled={
-            view.to - view.from <=
-            Math.min(1000, data.window.to - data.window.from)
-          }
-        >
-          放大
-        </button>
-        <button
-          onClick={() => zoom(2)}
-          disabled={view.to - view.from >= data.window.to - data.window.from}
-        >
-          缩小
+          自定义范围
         </button>
       </div>
-      <form
-        className="range-custom"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const start = Date.parse(from + "+08:00"),
-            end = Date.parse(to + "+08:00");
-          if (
-            !Number.isFinite(start) ||
-            !Number.isFinite(end) ||
-            end <= start
-          ) {
-            setError("结束时间必须晚于开始时间");
-            return;
-          }
-          if (start < data.window.from || end > data.window.to) {
-            setError("显示范围须位于顶部所选日期范围内");
-            return;
-          }
-          choose({ mode: "custom", window: { from: start, to: end } });
-        }}
-      >
-        <label>
-          显示开始{" "}
-          <input
-            type="datetime-local"
-            step="any"
-            aria-label="显示开始"
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value);
-              setDirty(true);
-            }}
-          />
-        </label>
-        <label>
-          显示结束{" "}
-          <input
-            type="datetime-local"
-            step="any"
-            aria-label="显示结束"
-            value={to}
-            onChange={(e) => {
-              setTo(e.target.value);
-              setDirty(true);
-            }}
-          />
-        </label>
-        <button>应用范围</button>
-      </form>
+      {custom && (
+        <form
+          className="range-custom"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const start = Date.parse(from + "+08:00"),
+              end = Date.parse(to + "+08:00");
+            if (
+              !Number.isFinite(start) ||
+              !Number.isFinite(end) ||
+              end <= start
+            ) {
+              setError("结束时间必须晚于开始时间");
+              return;
+            }
+            if (start < data.window.from || end > data.window.to) {
+              setError("显示范围须位于顶部所选日期范围内");
+              return;
+            }
+            choose({ mode: "custom", window: { from: start, to: end } });
+          }}
+        >
+          <label>
+            显示开始
+            <input
+              type="datetime-local"
+              step="any"
+              aria-label="显示开始"
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setDirty(true);
+              }}
+            />
+          </label>
+          <span aria-hidden="true">→</span>
+          <label>
+            显示结束
+            <input
+              type="datetime-local"
+              step="any"
+              aria-label="显示结束"
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setDirty(true);
+              }}
+            />
+          </label>
+          <button className="primary-button">应用范围</button>
+          <small>仅调整时间轴显示，不影响统计</small>
+        </form>
+      )}
       {error && (
         <p role="alert" className="range-error">
           {error}
         </p>
       )}
-      <div className="viewport-caption">
-        <output aria-label="时间轴显示范围">
-          {viewTime(view.from, view.to - view.from < 60000)} —{" "}
-          {viewTime(view.to, view.to - view.from < 60000)}
-        </output>
-        <span>UTC+08:00 · 仅调整时间轴，指标仍按顶部日期统计</span>
-        <small>拖动下方滑块平移 · Ctrl + 滚轮缩放</small>
-      </div>
     </div>
   );
 }
