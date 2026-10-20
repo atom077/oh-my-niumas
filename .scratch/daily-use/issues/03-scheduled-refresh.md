@@ -1,7 +1,7 @@
 # 03: 可关闭的准实时刷新
 
 Status: ready-for-agent
-Execution: in-review
+Execution: completed
 Blocked by: 02
 
 - [x] 默认关闭，手动扫描后可启用；15/30/60 秒，隐藏/切源暂停。
@@ -12,3 +12,5 @@ Blocked by: 02
 ## Comments
 
 2026-10-20：16 项计算/HTTP 测试和 6 项生产浏览器测试通过；正在独立审查。
+
+2026-10-20：最终 9 项生产浏览器回归通过；关闭/隐藏时取消分析 GET、Demo 隐藏恢复均有失败基线及修复回归。两路审查问题已修复并复核。
