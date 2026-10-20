@@ -9,7 +9,9 @@ function titleText(value: unknown): string {
   return value
     .replace(/[／＼]/g, (c) => (c === "／" ? "/" : "\\"))
     .replace(/[\x00-\x1f\x7f]/g, " ")
+    .replace(/\\\\[^\s<>"'`，。；（）()[\]{}]+/g, "[路径]")
     .replace(/[A-Za-z]:[\\/][^\s<>"'`，。；（）()[\]{}]+/g, "[路径]")
+    .replace(/\\[^\s<>"'`，。；（）()[\]{}]+/g, "[路径]")
     .replace(
       /\/(?:Users|home|private|tmp|var|opt|etc|Volumes)\/[^\s<>"'`，。；（）()[\]{}]+/g,
       "[路径]",

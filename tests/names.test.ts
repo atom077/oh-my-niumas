@@ -48,7 +48,9 @@ test("HTTP 使用 Codex 索引标题与目录名，索引改名无需重读日�
   const analysis = (query = "") =>
     fetch(base + "/api/analysis?source=local" + query).then((r) => r.json());
   try {
+    const originalIndex = await readFile(index, "utf8");
     await refresh();
+    assert.equal(await readFile(index, "utf8"), originalIndex);
     const first = await analysis();
     assert.equal(first.sessions[0].name, "验证会话标题");
     assert.equal(first.sessions[0].titleSource, "index");
@@ -78,6 +80,18 @@ test("HTTP 使用 Codex 索引标题与目录名，索引改名无需重读日�
     );
     await refresh();
     assert.equal((await analysis()).sessions[0].name, "检查目录在[路径]");
+    for (const path of [
+      String.raw`\\corp-server\secret-share\client-list.csv`,
+      String.raw`\\?\C:\secret\report.csv`,
+      "＼＼server＼share＼report.csv",
+    ]) {
+      await writeFile(
+        index,
+        entry("检查共享目录 " + path, "2026-10-20T03:40:00Z"),
+      );
+      await refresh();
+      assert.equal((await analysis()).sessions[0].name, "检查共享目录 [路径]");
+    }
     await rm(index);
     await refresh();
     assert.equal((await analysis()).sessions[0].name, "未命名会话");
