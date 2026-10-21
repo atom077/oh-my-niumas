@@ -7,7 +7,12 @@ import {
 } from "react";
 import type { Analysis, Interval, Session, Turn } from "../core/types";
 import { duration } from "./Timeline";
-import { limitWindow, type TimeWindow } from "./timeline-window";
+import {
+  limitWindow,
+  providerTint,
+  type ProviderTint,
+  type TimeWindow,
+} from "./timeline-window";
 import {
   activityOverview,
   chartBox,
@@ -78,19 +83,27 @@ function PlotGrid({ view }: { view: TimeWindow }) {
   );
 }
 
+/**
+ * One execution or closed-wait bar. Execution bars share the striped "running" look and are
+ * tinted by AI source; waits stay a thin muted rail without an inline duration.
+ */
 function Execution({
   interval,
   view,
+  tint,
   onClick,
 }: {
   interval: Interval;
   view: TimeWindow;
+  tint: ProviderTint;
   onClick: () => void;
 }) {
   const box = chartBox(interval.start, interval.end, view);
   if (!box) return null;
-  const label = `${
-    interval.kind === "ai_active" ? "AI 执行" : "闭合等待"
+  const inferred = interval.confidence === "inferred";
+  const active = interval.kind === "ai_active";
+  const label = `${active ? "AI 执行" : "闭合等待"}${
+    inferred ? "（Cursor 推算）" : ""
   } ${clock(Math.max(interval.start, view.from), true)}–${clock(
     Math.min(interval.end, view.to),
     true,
@@ -101,14 +114,18 @@ function Execution({
     <button
       type="button"
       className={`execution-mark ${
-        interval.kind === "awaiting_user" ? "wait-mark" : "active-mark"
-      }${box.continued ? " continues" : ""}${box.preceded ? " preceded" : ""}`}
+        active
+          ? `active-mark run-${interval.status === "completed" ? tint : "abnormal"}`
+          : "wait-mark"
+      }${inferred ? " inferred" : ""}${box.continued ? " continues" : ""}${
+        box.preceded ? " preceded" : ""
+      }`}
       style={{ left: `${box.left}%`, width: `${box.width}%` }}
       title={`${label}${box.continued ? " · 继续至下一时段" : ""}`}
       aria-label={label}
       onClick={onClick}
     >
-      {box.width > 9 && (
+      {active && box.width > 9 && (
         <span>
           {duration(
             Math.min(interval.end, view.to) -
@@ -121,13 +138,24 @@ function Execution({
   );
 }
 
-function ChartLegend() {
+/** Legend lists only the sources that are actually drawn, so a Codex-only view stays "AI 执行". */
+function ChartLegend({ sessions }: { sessions: readonly Session[] }) {
+  const cursor = sessions.some((s) => s.provider === "cursor"),
+    codex = !sessions.length || sessions.some((s) => s.provider !== "cursor");
   return (
     <div className="layered-legend">
-      <span>
-        <i className="key-execution" />
-        AI 执行
-      </span>
+      {codex && (
+        <span>
+          <i className="key-execution run-codex" />
+          {cursor ? "Codex 执行" : "AI 执行"}
+        </span>
+      )}
+      {cursor && (
+        <span>
+          <i className="key-execution run-cursor" />
+          Cursor 推算执行
+        </span>
+      )}
       <span>
         <i className="key-wait" />
         闭合等待
@@ -225,7 +253,7 @@ export function CollaborationTimeline({
     data.metrics.closedTurns === 0 &&
     data.sessions.some((s) => s.turns.length > 0)
       ? null
-      : data.metrics.workloadMs + (data.metrics.reportedWorkloadMs ?? 0);
+      : data.metrics.workloadMs + (data.metrics.unlocatedReportedMs ?? 0);
   const openHour = (at: number) =>
     onChange({
       ...state,
@@ -395,10 +423,14 @@ export function CollaborationTimeline({
                             )
                             ? null
                             : project.workloadMs +
-                                (project.reportedWorkloadMs ?? 0),
+                                (project.unlocatedReportedMs ?? 0),
                         )}
                         {project.reportedWorkloadMs !== null && (
-                          <small>含 Cursor 记录</small>
+                          <small>
+                            {project.inferredWorkloadMs > 0
+                              ? "含 Cursor 推算"
+                              : "含 Cursor 记录"}
+                          </small>
                         )}
                       </span>
                     </div>
@@ -501,7 +533,7 @@ export function CollaborationTimeline({
             </div>
           </section>
           <p className="layered-note">
-            Cursor 记录时长按输入时间归属，不补造执行区间。
+            Cursor 执行区间按输入时间 + 记录时长推算；未通过校验的轮次只计记录时长、不绘制执行条。
           </p>
         </>
       ) : (
@@ -625,7 +657,7 @@ export function CollaborationTimeline({
                                   </small>
                                 </button>
                                 {ss.some((s) => s.provider === "cursor") && (
-                                  <small>Cursor：执行起止未验证</small>
+                                  <small>Cursor：执行条为推算</small>
                                 )}
                               </div>
                               {!closed &&
@@ -666,6 +698,7 @@ export function CollaborationTimeline({
                                             key={i.id}
                                             interval={i}
                                             view={selectedHour}
+                                            tint={providerTint([s])}
                                             onClick={() =>
                                               openSession(
                                                 s,
@@ -762,7 +795,16 @@ export function CollaborationTimeline({
                     </div>
                   </div>
                 )}
-                <ChartLegend />
+                <ChartLegend
+                  sessions={hourly.filter((s) =>
+                    data.intervals.some(
+                      (i) =>
+                        i.sessionId === s.id &&
+                        i.kind === "ai_active" &&
+                        overlaps(i.start, i.end, selectedHour),
+                    ),
+                  )}
+                />
                 <p className="layered-note">
                   输入点位于执行条上方；密集输入按分钟合并，悬停可查看原始时间。越过右边界的执行条带有继续标记。
                 </p>
@@ -795,20 +837,23 @@ export function CollaborationTimeline({
                 <span className="provider-badge">{providerName(session)}</span>
                 <span>{turns.length} 轮（当前小时片段）</span>
                 <span className="fragment-workload">
-                  {session.provider === "cursor"
+                  {fragmentIntervals.length
+                    ? session.provider === "cursor"
+                      ? "片段执行（推算）"
+                      : "片段执行"
+                    : session.provider === "cursor"
                     ? "记录累计（当前小时归属）"
                     : "片段执行"}{" "}
                   <b>
                     {duration(
-                      session.provider === "cursor"
-                        ? turns.some((t) => t.reportedDurationMs !== undefined)
-                          ? turns.reduce(
-                              (n, t) => n + (t.reportedDurationMs ?? 0),
-                              0,
-                            )
-                          : null
-                        : fragmentIntervals.length
+                      fragmentIntervals.length
                         ? fragmentWork
+                        : session.provider === "cursor" &&
+                          turns.some((t) => t.reportedDurationMs !== undefined)
+                        ? turns.reduce(
+                            (n, t) => n + (t.reportedDurationMs ?? 0),
+                            0,
+                          )
                         : null,
                     )}
                   </b>
@@ -999,6 +1044,7 @@ export function CollaborationTimeline({
                                   <Execution
                                     interval={interval}
                                     view={view}
+                                    tint={providerTint([session])}
                                     onClick={() =>
                                       onChange({ ...state, turnId: t.id })
                                     }
@@ -1067,7 +1113,9 @@ export function CollaborationTimeline({
                   <div className="chosen-turn">
                     <strong>第 {session.turns.indexOf(chosen) + 1} 轮</strong>
                     <span className={`turn-status ${chosen.status}`}>
-                      {statuses[chosen.status]}
+                      {chosen.timing === "inferred"
+                        ? "推算完成"
+                        : statuses[chosen.status]}
                     </span>
                     <span>
                       开始{" "}
@@ -1129,10 +1177,11 @@ export function CollaborationTimeline({
                     </button>
                   </div>
                 )}
-                <ChartLegend />
+                <ChartLegend sessions={[session]} />
                 {session.provider === "cursor" && (
                   <p className="layered-note">
-                    记录时长不代表可定位执行区间；此处仅展示已观测输入。
+                    Cursor 执行条 = 输入时间 + Cursor
+                    记录时长推算；与结尾消息不一致的轮次仅显示输入点。
                   </p>
                 )}
               </section>

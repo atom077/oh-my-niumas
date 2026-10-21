@@ -5,9 +5,59 @@ import { mkdtemp, cp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../app/server.ts";
+import {
+  INFERENCE_TOLERANCE_MS,
+  normalizeCursor,
+} from "../app/cursor-importer.ts";
 import { cursorFixture } from "./helpers/cursor-fixture.ts";
 
-test("Cursor HTTP 接入：来源隔离、未知边界、只读隐私、刷新与重启", async () => {
+test("Cursor 推算区间：容差边界、越过下一次输入与缺少记录时长", () => {
+  const t0 = Date.parse("2026-10-19T01:00:00Z");
+  const bubble = (
+    id: string,
+    type: 1 | 2,
+    at: number,
+    reportedDurationMs: number | null = null,
+  ) => ({
+    id,
+    type,
+    at,
+    start: null,
+    completed: null,
+    reportedDurationMs,
+    simulated: false,
+  });
+  const [s] = normalizeCursor([
+    {
+      id: "edge",
+      projectId: "p",
+      projectName: "p",
+      projectKnown: true,
+      bubbles: [
+        // Exactly at tolerance: accepted.
+        bubble("u1", 1, t0),
+        bubble("a1", 2, t0 + 60_000 - INFERENCE_TOLERANCE_MS, 60_000),
+        // Agrees with its message but runs past the next input: rejected.
+        bubble("u2", 1, t0 + 100_000),
+        bubble("a2", 2, t0 + 150_000, 50_000),
+        // No recorded duration: rejected.
+        bubble("u3", 1, t0 + 140_000),
+        bubble("a3", 2, t0 + 150_000),
+      ],
+    },
+  ]).sessions;
+  assert.deepEqual(
+    s.turns.map((t) => [t.start, t.end, t.timing ?? null]),
+    [
+      [t0, t0 + 60_000, "inferred"],
+      [null, null, null],
+      [null, null, null],
+    ],
+  );
+  assert.ok(s.issues.some((i) => i.includes("2 轮缺少记录时长")));
+});
+
+test("Cursor HTTP 接入：来源隔离、推算区间、只读隐私、刷新与重启", async () => {
   const root = await mkdtemp(join(tmpdir(), "niumas-cursor-"));
   await cp("fixtures/import-smoke", root, { recursive: true });
   const cursorRoot = join(root, "cursor"),
@@ -52,7 +102,13 @@ test("Cursor HTTP 接入：来源隔离、未知边界、只读隐私、刷新�
       codex = await app.analysis("codex");
     assert.equal(all.sessions.length, 2);
     assert.equal(all.projects.length, 1, "同目录跨来源共用项目");
-    assert.equal(all.metrics.workloadMs, codex.metrics.workloadMs);
+    assert.equal(all.metrics.workloadMs, codex.metrics.workloadMs + 40_000);
+    assert.equal(all.metrics.inferredWorkloadMs, 40_000);
+    assert.equal(
+      all.metrics.unlocatedReportedMs,
+      40_000,
+      "混合总量只补未定位记录，推算轮次不重复累加",
+    );
     assert.equal(all.metrics.reportedWorkloadMs, 80_000);
     assert.equal(cursor.metrics.reportedWorkloadMs, 80_000);
     assert.equal(cursor.metrics.reportedTurns, 2);
@@ -65,16 +121,40 @@ test("Cursor HTTP 接入：来源隔离、未知边界、只读隐私、刷新�
     assert.equal(cursor.sessions[0].provider, "cursor");
     assert.equal(cursor.sessions[0].name, "Cursor 合成写作");
     assert.equal(cursor.sessions[0].turns.length, 2);
-    assert.equal(cursor.sessions[0].turns[0].reportedDurationMs, 40_000);
-    assert.equal(cursor.sessions[0].turns[0].start, null);
-    assert.equal(cursor.sessions[0].turns[0].end, null);
+    const base = Date.parse("2026-10-19T01:00:00Z");
+    const [inferred, unlocated] = cursor.sessions[0].turns;
+    assert.equal(inferred.reportedDurationMs, 40_000);
+    assert.equal(inferred.start, base, "推算起点为输入时间");
+    assert.equal(inferred.end, base + 40_000, "推算终点为输入 + 记录时长");
+    assert.equal(inferred.timing, "inferred");
+    assert.equal(inferred.status, "completed");
+    assert.equal(unlocated.start, null, "与结尾消息相差 30 秒，超出容差");
+    assert.equal(unlocated.end, null);
+    assert.equal(unlocated.timing, undefined);
+    assert.equal(unlocated.status, "unknown");
     assert.equal(cursor.metrics.tokens, null);
-    assert.equal(cursor.metrics.waitingMs, null);
-    assert.equal(cursor.metrics.coverageMs, 0);
+    assert.equal(cursor.metrics.workloadMs, 40_000);
+    assert.equal(cursor.metrics.coverageMs, 40_000);
+    assert.equal(cursor.metrics.waitingMs, 80_000, "推算终点至下一次输入");
     assert.equal(cursor.metrics.inputCount, 2);
-    assert.equal(cursor.intervals.length, 0);
-    assert.equal(cursor.confidence.timing, "unknown");
-    assert.equal(cursor.sessions[0].spanMs, 180_000);
+    assert.deepEqual(
+      cursor.intervals.map((i: { kind: string; confidence: string }) => [
+        i.kind,
+        i.confidence,
+      ]),
+      [
+        ["ai_active", "inferred"],
+        ["awaiting_user", "inferred"],
+      ],
+    );
+    assert.equal(cursor.confidence.timing, "inferred");
+    assert.equal(cursor.confidence.waiting, "inferred");
+    assert.equal(cursor.sessions[0].spanMs, 190_000);
+    assert.ok(
+      cursor.sessions[0].issues.some((i: string) =>
+        i.includes("1 轮缺少记录时长或与消息跨度不一致"),
+      ),
+    );
     assert.equal(cursor.sessions[0].reportedWorkloadMs, 80_000);
     assert.equal(cursor.sessions[0].reportedTurns, 2);
     assert.equal(cursor.sessions[0].reportedTurnTotal, 2);

@@ -554,8 +554,8 @@ export function App() {
               {source === "local" &&
                 data.sessions.some((s) => s.provider === "cursor") && (
                   <p className="table-note cursor-coverage" role="note">
-                    Cursor 记录时长已汇总，按轮次输入时间归属；整轮边界及 Token
-                    未验证，活跃覆盖、等待与并发缺少证据时显示 N/A。
+                    Cursor 执行区间按输入时间 + 记录时长推算（深色执行条），与结尾消息相差超过
+                    20 秒的轮次不绘制，只计记录时长；Cursor 未提供官方轮次边界，Token 未验证。
                   </p>
                 )}
               {page === "overview" && (
@@ -572,22 +572,29 @@ export function App() {
                           metrics!.reportedWorkloadMs === null
                         ? null
                         : metrics!.workloadMs +
-                          (metrics!.reportedWorkloadMs ?? 0),
+                          (metrics!.unlocatedReportedMs ?? 0),
                     )}
                     note={
                       cursorOnly
                         ? `记录覆盖 ${metrics!.reportedTurns}/${
                             metrics!.reportedTurnTotal
-                          } 轮 · 按输入时间归属`
+                          } 轮 · 推算区间 ${metrics!.closedTurns} 轮`
                         : `已知执行 · 闭合 ${metrics!.closedTurns}/${
                             metrics!.observedTurns
                           } 轮${
                             metrics!.reportedWorkloadMs !== null
                               ? ` · Codex ${duration(
-                                  metrics!.workloadMs,
-                                )} + Cursor 记录 ${duration(
-                                  metrics!.reportedWorkloadMs,
-                                )}`
+                                  metrics!.workloadMs -
+                                    metrics!.inferredWorkloadMs,
+                                )} + Cursor 推算 ${duration(
+                                  metrics!.inferredWorkloadMs,
+                                )}${
+                                  metrics!.unlocatedReportedMs
+                                    ? ` + 未定位记录 ${duration(
+                                        metrics!.unlocatedReportedMs,
+                                      )}`
+                                    : ""
+                                }`
                               : ""
                           }`
                     }
@@ -601,7 +608,9 @@ export function App() {
                         : metrics!.coverageMs,
                     )}
                     note={
-                      metrics!.reportedWorkloadMs !== null
+                      metrics!.inferredWorkloadMs > 0
+                        ? "含 Cursor 推算区间 · 去重后的现实时间"
+                        : metrics!.reportedWorkloadMs !== null
                         ? "仅含可定位区间 · 去重后的现实时间"
                         : "去重后的现实时间"
                     }
@@ -616,7 +625,9 @@ export function App() {
                     note={
                       metrics!.coverageMs > 0
                         ? `${
-                            metrics!.reportedWorkloadMs !== null
+                            metrics!.inferredWorkloadMs > 0
+                              ? "含 Cursor 推算 · "
+                              : metrics!.reportedWorkloadMs !== null
                               ? "仅含可定位区间 · "
                               : ""
                           }${duration(metrics!.workloadMs)} ÷ ${duration(
@@ -743,7 +754,7 @@ export function App() {
                                         (t) => t.status !== "unknown",
                                       ),
                                   )
-                                    ? p.workloadMs + (p.reportedWorkloadMs ?? 0)
+                                    ? p.workloadMs + (p.unlocatedReportedMs ?? 0)
                                     : p.reportedWorkloadMs,
                                 )}
                                 {p.reportedWorkloadMs !== null && (
@@ -859,7 +870,7 @@ export function App() {
                                   {s.provider === "cursor" ? (
                                     <span
                                       className="session-duration"
-                                      title="按轮次输入时间归属的 Cursor 记录值；不能定位绝对起止或用于并发统计"
+                                      title="按轮次输入时间归属的 Cursor 记录值；通过校验的轮次另按记录时长推算执行区间"
                                     >
                                       {duration(s.reportedWorkloadMs ?? null)}
                                       <small>
@@ -1015,7 +1026,7 @@ function SessionDetail({
             s.provider === "cursor"
               ? `记录覆盖 ${s.reportedTurns ?? 0}/${
                   s.reportedTurnTotal ?? 0
-                } 轮 · 按输入时间归属，绝对起止未知`
+                } 轮 · 执行区间按记录时长推算`
               : "日志开始至终止的经过时间，包含工具、内部等待及可能的暂停"
           }
         />
@@ -1034,7 +1045,7 @@ function SessionDetail({
         </span>
         <span>已知闭合等待 {duration(s.waitingMs)}</span>
         <span>
-          {s.provider === "cursor"
+          {s.waitingMs === null
             ? "开放等待未知"
             : s.openWaiting
             ? "待下次输入（开放等待不累计）"
@@ -1058,7 +1069,9 @@ function SessionDetail({
               <div>
                 <strong>第 {s.turns.indexOf(t) + 1} 轮</strong>
                 <p>
-                  {t.observedAt != null
+                  {t.timing === "inferred"
+                    ? `输入 ${time(t.start!)}`
+                    : t.observedAt != null
                     ? `输入 ${time(t.observedAt)} · 起点未知`
                     : t.start === null
                     ? "起点未知"
@@ -1074,13 +1087,17 @@ function SessionDetail({
                     <span className="reported-duration">
                       {" "}
                       · Cursor 记录时长 {duration(t.reportedDurationMs)}
-                      （绝对起止未知，不补造执行区间）
+                      {t.timing === "inferred"
+                        ? "（终点按此推算）"
+                        : "（与消息跨度不一致或缺少校验，未绘制执行区间）"}
                     </span>
                   )}
                 </p>
               </div>
               <span className={"turn-status " + t.status}>
-                {t.status === "unknown"
+                {t.timing === "inferred"
+                  ? "推算完成"
+                  : t.status === "unknown"
                   ? t.observedAt != null
                     ? "边界未知"
                     : t.end === null

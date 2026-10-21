@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createApp } from "../../app/server.ts";
 import { cursorFixture } from "../helpers/cursor-fixture.ts";
 
-test("Cursor 来源筛选、未知指标、记录时长与跨来源时间轴", async ({ page }) => {
+test("Cursor 来源筛选、推算区间、记录时长与跨来源时间轴", async ({ page }) => {
   const root = await mkdtemp(join(tmpdir(), "niumas-cursor-browser-"));
   await cp("fixtures/import-smoke", root, { recursive: true });
   const cursorRoot = join(root, "cursor");
@@ -40,16 +40,19 @@ test("Cursor 来源筛选、未知指标、记录时长与跨来源时间轴", a
       "AI 累计时长 · Cursor 记录",
     );
     await expect(page.locator(".metrics .metric").first()).toContainText(
-      "记录覆盖 2/2 轮",
+      "记录覆盖 2/2 轮 · 推算区间 1 轮",
     );
     await expect(
       page.locator(".metrics .metric").nth(1).locator("strong"),
-    ).toHaveText("N/A");
+    ).toHaveText("40.0 s");
+    await expect(page.locator(".metrics .metric").nth(1)).toContainText(
+      "含 Cursor 推算区间",
+    );
     await expect(page.locator(".metrics .metric").nth(2)).toContainText(
-      "缺少可定位的执行区间",
+      "含 Cursor 推算 · 40.0 s ÷ 40.0 s",
     );
     await expect(page.locator(".cursor-coverage")).toContainText(
-      "整轮边界及 Token 未验证",
+      "Cursor 执行区间按输入时间 + 记录时长推算",
     );
     await page.screenshot({
       path: "docs/screenshots/cursor-overview.png",
@@ -80,11 +83,21 @@ test("Cursor 来源筛选、未知指标、记录时长与跨来源时间轴", a
     await expect(page.locator(".hourly-panel")).toContainText(
       "Cursor 合成写作",
     );
-    await expect(page.locator(".hourly-panel .active-mark")).toHaveCount(0);
+    await expect(page.locator(".hourly-panel .active-mark")).toHaveCount(1);
+    await expect(
+      page.locator(".hourly-panel .active-mark.inferred"),
+    ).toHaveAttribute("aria-label", /AI 执行（Cursor 推算）/);
     await expect(page.locator(".hourly-panel .input-mark")).toHaveCount(2);
+    await expect(page.locator(".hourly-panel")).toContainText("Cursor 推算执行");
     await page.locator(".hour-session-name").click();
     await expect(page.locator(".minute-turn-row")).toHaveCount(2);
-    await expect(page.locator(".minute-panel .active-mark")).toHaveCount(0);
+    await expect(page.locator(".minute-panel .active-mark.inferred")).toHaveCount(
+      1,
+    );
+    await expect(page.locator(".minute-panel .unknown-input-mark")).toHaveCount(
+      1,
+    );
+    await expect(page.locator(".chosen-turn")).toContainText("推算完成");
     await expect(page.locator(".chosen-turn .reported-duration")).toContainText(
       "40.0 s",
     );
@@ -104,10 +117,10 @@ test("Cursor 来源筛选、未知指标、记录时长与跨来源时间轴", a
     await page.getByLabel("会话来源").selectOption("");
     await expect(page.locator(".metric strong").first()).toHaveText("11.3 min");
     await expect(page.locator(".metrics .metric").first()).toContainText(
-      "Codex 10 min + Cursor 记录 1.3 min",
+      "Codex 10 min + Cursor 推算 40.0 s + 未定位记录 40.0 s",
     );
     await expect(page.locator(".metrics .metric").nth(2)).toContainText(
-      "10 min ÷ 10 min",
+      "含 Cursor 推算 · 10.7 min ÷",
     );
     await page.getByRole("button", { name: "项目", exact: true }).click();
     await expect(page.locator("tbody tr td").nth(2)).toContainText("11.3 min");

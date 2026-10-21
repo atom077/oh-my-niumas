@@ -594,11 +594,17 @@ h2 {
   width: 10px;
   height: 10px;
   border-radius: 3px;
-  background: var(--blue);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--run, var(--blue)) 0 3px,
+    var(--run-soft, #80a8f0) 3px 6px
+  );
+  border: 1px dashed var(--run-ink, #2f62c4);
 }
 .legend-dot.waiting {
-  background: #fff2cf;
-  border: 1px dashed #c39748;
+  height: 5px;
+  background: #eeebe4;
+  border: 1px dashed #d3ccbd;
 }
 .input-diamond {
   color: #283e66;
@@ -1524,13 +1530,51 @@ footer {
   text-align: center;
   white-space: nowrap;
 }
-.execution-mark.active-mark {
-  background: var(--blue);
-  color: white;
+/*
+ * Source tints for execution bars; keep in sync with RUN_TINTS in Timeline.tsx.
+ * Every execution bar shares the striped + dashed "running" look, color only tells the source.
+ */
+.run-codex {
+  --run: #4b83e8;
+  --run-soft: #80a8f0;
+  --run-ink: #2f62c4;
 }
+.run-cursor {
+  --run: #2a2e36;
+  --run-soft: #5d636f;
+  --run-ink: #14161a;
+}
+.run-mixed {
+  --run: #5a6a8a;
+  --run-soft: #8d9ab3;
+  --run-ink: #3c4863;
+}
+.run-abnormal {
+  --run: #d9876f;
+  --run-soft: #edb3a2;
+  --run-ink: #bb7867;
+}
+.execution-mark.active-mark,
+.key-execution {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--run, var(--blue)) 0 5px,
+    var(--run-soft, #80a8f0) 5px 10px
+  );
+  outline: 1px dashed var(--run-ink, #2f62c4);
+  outline-offset: -1px;
+}
+.execution-mark.active-mark {
+  color: white;
+  text-shadow: 0 0 2px var(--run-ink, #2f62c4);
+}
+/* Closed waits are a thin muted rail centered on the execution lane so they never compete with it. */
 .execution-mark.wait-mark {
-  background: #fff0c9;
-  color: #705b2a;
+  top: 39px;
+  height: 6px;
+  border-radius: 3px;
+  background: #eeebe4;
+  border: 1px dashed #d3ccbd;
   z-index: 1;
 }
 .execution-mark.continues {
@@ -1615,11 +1659,12 @@ footer {
   display: inline-block;
   width: 28px;
   height: 13px;
-  background: var(--blue);
   border-radius: 3px;
 }
 .key-wait {
-  background: #fff0c9;
+  height: 6px;
+  background: #eeebe4;
+  border: 1px dashed #d3ccbd;
 }
 .minute-session-summary {
   background: white;
@@ -1783,7 +1828,7 @@ footer {
   top: 57px;
   height: 4px;
   min-width: 1px;
-  border-top: 1px dashed #d8b76a;
+  border-top: 1px dashed #cfc8b8;
   padding: 0;
   z-index: 1;
 }

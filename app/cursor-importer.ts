@@ -11,6 +11,8 @@ const MAX_DATABASES = 100,
   MAX_MESSAGES = 20_000;
 const MAX_VALUE = 64 * 1024 * 1024,
   MAX_BYTES = 128 * 1024 * 1024;
+/** Max gap between input + turnDurationMs and the terminal message; ~93% of locally sampled turns fall within it. */
+export const INFERENCE_TOLERANCE_MS = 20_000;
 const obj = (v: unknown): Record<string, any> =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? v : {};
 const at = (v: unknown): number | null => {
@@ -81,15 +83,10 @@ export function normalizeCursor(projections: Projection[]): Dataset {
     s.provider = "cursor";
     s.titleSource = "missing";
     s.name = "未命名会话";
-    s.issues.push(
-      "Cursor 整轮起止边界未验证，执行、并发及闭合等待不计入已知值",
-    );
-    s.issues.push("Cursor Token 计数语义未验证，零值不代表零消耗，显示 N/A");
-    if (!p.projectKnown)
-      s.issues.push("Cursor 缺少单目录工作区证据，项目归属未知");
-    else s.issues.push("Cursor 项目按工作区目录归属，不能证明是会话起始 cwd");
     let turn: Session["turns"][number] | undefined;
     const times: number[] = [];
+    /** Creation time of the assistant message that carries each turn's recorded duration. */
+    const terminalAt = new Map<string, number | null>();
     p.bubbles.forEach((b, index) => {
       for (const t of [b.at, b.start, b.completed])
         if (t !== null) times.push(t);
@@ -103,22 +100,62 @@ export function normalizeCursor(projections: Projection[]): Dataset {
           tokens: null,
           evidence: [{ source: p.id, line: index + 1 }],
         };
-        // Input time is an observed activity point, not an AI execution start.
         s.turns.push(turn);
+        // Cursor stamps the user message at submission, and turnDurationMs is timed from it.
         if (b.at !== null)
-          s.inputs.push({ id: b.id, at: b.at, turnId: turn.id, exact: false });
+          s.inputs.push({ id: b.id, at: b.at, turnId: turn.id, exact: true });
       } else if (b.type === 2 && turn) {
-        if (b.reportedDurationMs !== null)
-          turn.reportedDurationMs = Math.max(
-            turn.reportedDurationMs ?? 0,
-            b.reportedDurationMs,
-          );
+        if (
+          b.reportedDurationMs !== null &&
+          b.reportedDurationMs > (turn.reportedDurationMs ?? 0)
+        ) {
+          turn.reportedDurationMs = b.reportedDurationMs;
+          terminalAt.set(turn.id, b.at);
+        }
         turn.evidence.push({ source: p.id, line: index + 1 });
       }
     });
     if (!s.inputs.length) continue;
+    // No official API exposes turn end; accept input + duration only when it agrees with the terminal message
+    // and does not run into the next input. Everything else stays an activity point.
+    let unlocated = 0;
+    s.turns.forEach((t, i) => {
+      const terminal = terminalAt.get(t.id) ?? null,
+        next = s.turns[i + 1]?.observedAt ?? null;
+      const end =
+        t.observedAt != null && t.reportedDurationMs !== undefined
+          ? t.observedAt + t.reportedDurationMs
+          : null;
+      if (
+        end !== null &&
+        terminal !== null &&
+        Math.abs(end - terminal) <= INFERENCE_TOLERANCE_MS &&
+        (next === null || end <= next)
+      ) {
+        t.start = t.observedAt!;
+        t.end = end;
+        // A recorded terminal duration is the only completion evidence; aborts are indistinguishable.
+        t.status = "completed";
+        t.timing = "inferred";
+      } else unlocated++;
+    });
+    if (s.turns.some((t) => t.timing === "inferred"))
+      s.issues.push(
+        "Cursor 执行区间按输入时间 + 记录时长推算（与结尾消息相差不超过 20 秒），非官方接口，状态按完成推算",
+      );
+    if (unlocated)
+      s.issues.push(
+        `Cursor ${unlocated} 轮缺少记录时长或与消息跨度不一致，未绘制执行区间`,
+      );
+    s.issues.push("Cursor Token 计数语义未验证，零值不代表零消耗，显示 N/A");
+    if (!p.projectKnown)
+      s.issues.push("Cursor 缺少单目录工作区证据，项目归属未知");
+    else s.issues.push("Cursor 项目按工作区目录归属，不能证明是会话起始 cwd");
     s.activityTimes = [...new Set(times)];
-    for (const t of times) {
+    // Inferred ends may trail the last stored message slightly; keep them inside the session extent.
+    for (const t of times.concat(
+      s.turns.flatMap((t) => (t.end === null ? [] : [t.end])),
+    )) {
       if (s.firstAt === null || t < s.firstAt) s.firstAt = t;
       if (s.lastAt === null || t > s.lastAt) s.lastAt = t;
     }

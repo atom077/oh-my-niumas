@@ -43,13 +43,19 @@ export async function cursorFixture(root: string) {
       text: "SECRET_PROMPT",
       conversationMap: { secret: "SECRET_MAP" },
     });
+    // Turn 1: input + 40 s lands 2 s after the terminal message, so its interval is inferred.
+    // Turn 2: the terminal message is 30 s past input + 40 s, beyond tolerance, so it stays an activity point.
+    const createdAt = [0, 38_000, 120_000, 190_000];
     for (let i = 0; i < 4; i++) {
       const assistant = i % 2 === 1;
       put(`bubbleId:${id}:${headers[i].bubbleId}`, {
         type: assistant ? 2 : 1,
-        createdAt: new Date(base + i * 60_000).toISOString(),
+        createdAt: new Date(base + createdAt[i]).toISOString(),
         ...(assistant
-          ? { startedAtMs: base + i * 60_000, turnDurationMs: 40_000 }
+          ? {
+              startedAtMs: base + createdAt[i - 1] + 3_000,
+              turnDurationMs: 40_000,
+            }
           : {}),
         tokenCount: { inputTokens: 0, outputTokens: 0 },
         text: assistant ? "SECRET_OUTPUT" : "SECRET_INPUT",

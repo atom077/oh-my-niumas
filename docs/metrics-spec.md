@@ -124,3 +124,12 @@ Cursor 的 `reportedWorkloadMs` 是各个可归属轮次 `reportedDurationMs` �
 全天密度统计当前窗口的真实输入次数，单日格子按15分钟、多日格子按上海日历日；因视觉补齐日期/小时产生的范围不带回统计窗口外输入。颜色不是执行时长或效率。无输入但有已知执行的格子用单独描边，Cursor记录时长不用于填充执行覆盖。
 
 小时按输入、已知执行与边界观测筛选会话；执行区间取窗口交集，输入采用左闭右开。分钟片段保留原始轮次编号，区间时长按该小时裁切，记录时长按输入归属；跨度包括间隔。图表状态、缩放和聚类不改写Analysis工作量/覆盖/并发/Token。高级区间分析继续使用原始统计模型。
+
+## 2026-10-20 Cursor 推算执行区间（修订上文 Cursor 口径）
+
+Cursor 未提供历史轮次边界的官方接口，依据与本机核验见 [Cursor 日志核验](cursor-log-findings.md)。通过校验的 Cursor 轮次以“用户消息时间 → 用户消息时间 + 记录时长”为执行区间：终点与结尾消息相差不超过 20 秒且不晚于下一次输入；状态按 completed 推算。`Interval.confidence` 与 `Turn.timing` 标记为 inferred。
+
+- `workloadMs`、`coverageMs`、并发、闭合等待均包含推算区间；存在推算区间时 `confidence.timing`（及来自推算终点的等待对应的 `confidence.waiting`）为 inferred，页面标注“含 Cursor 推算”。平均并行倍数仍为 `workloadMs / coverageMs`。
+- `inferredWorkloadMs` 为 `workloadMs` 中推算区间的窗口内时长；`reportedWorkloadMs` 不变，仍为按输入时间归属的全部记录时长；`unlocatedReportedMs` 为未通过校验轮次的记录时长。
+- 混合主数值（总览首卡、时间轴累计、项目表）改为 `workloadMs + (unlocatedReportedMs ?? 0)`，不再加 `reportedWorkloadMs`，避免推算轮次双计。Cursor 单来源首卡仍显示记录累计，并注明推算区间轮数。
+- 未通过校验的轮次继续是活动点与 unknown 状态，不进入覆盖、并发或等待。

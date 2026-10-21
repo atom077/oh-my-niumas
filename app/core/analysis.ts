@@ -424,7 +424,12 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
   });
   for (const s of sessions) {
     s.workloadMs = 0;
-    s.waitingMs = s.provider === "cursor" ? null : 0;
+    s.inferredWorkloadMs = 0;
+    // Cursor waits are only measurable once at least one turn has an inferred end.
+    s.waitingMs =
+      s.provider === "cursor" && !s.turns.some((t) => t.timing === "inferred")
+        ? null
+        : 0;
     s.openWaiting = false;
     const reportedTurns = s.turns.filter((t) => inWindow(t.observedAt ?? null));
     const withDuration = reportedTurns.filter(
@@ -434,6 +439,11 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
     s.reportedTurnTotal = reportedTurns.length;
     s.reportedWorkloadMs = withDuration.length
       ? withDuration.reduce((n, t) => n + t.reportedDurationMs!, 0)
+      : null;
+    s.unlocatedReportedMs = withDuration.length
+      ? withDuration
+          .filter((t) => t.timing !== "inferred")
+          .reduce((n, t) => n + t.reportedDurationMs!, 0)
       : null;
     const activityPoints = s.turns
       .flatMap((t) => [t.start, t.end])
@@ -491,8 +501,11 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
             ...bounds,
             status: t.status,
             kind: "ai_active",
+            confidence: t.timing ?? "observed",
           });
           s.workloadMs += bounds.end - bounds.start;
+          if (t.timing === "inferred")
+            s.inferredWorkloadMs += bounds.end - bounds.start;
         }
       }
       if (t.status !== "completed" || t.end === null || t.end >= window.to)
@@ -530,6 +543,7 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
           ...bounds,
           status: "completed",
           kind: "awaiting_user",
+          confidence: t.timing ?? "observed",
         });
       }
     }
@@ -562,8 +576,12 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
       ? ss.reduce((n, s) => n + (s.waitingMs ?? 0), 0)
       : null;
   const reportedSummary = (ss: Session[]) => ({
+    inferredWorkloadMs: ss.reduce((n, s) => n + (s.inferredWorkloadMs ?? 0), 0),
     reportedWorkloadMs: ss.some((s) => s.reportedWorkloadMs != null)
       ? ss.reduce((n, s) => n + (s.reportedWorkloadMs ?? 0), 0)
+      : null,
+    unlocatedReportedMs: ss.some((s) => s.unlocatedReportedMs != null)
+      ? ss.reduce((n, s) => n + (s.unlocatedReportedMs ?? 0), 0)
       : null,
     reportedTurns: ss.reduce((n, s) => n + (s.reportedTurns ?? 0), 0),
     reportedTurnTotal: ss.reduce((n, s) => n + (s.reportedTurnTotal ?? 0), 0),
@@ -617,14 +635,25 @@ export function analyze(dataset: Dataset, query: Query = {}): Analysis {
       ...new Set([...dataset.issues, ...sessions.flatMap((s) => s.issues)]),
     ],
     confidence: {
-      timing: activeIntervals.length ? "observed" : "unknown",
+      timing: activeIntervals.some((i) => i.confidence === "inferred")
+        ? "inferred"
+        : activeIntervals.length
+        ? "observed"
+        : "unknown",
       tokens:
         sumTokens(sessions) === null
           ? "unknown"
           : sessions.some((s) => s.tokenMode === "counter")
           ? "inferred"
           : "observed",
-      waiting: sumWait(sessions) === null ? "unknown" : "observed",
+      waiting:
+        sumWait(sessions) === null
+          ? "unknown"
+          : intervals.some(
+              (i) => i.kind === "awaiting_user" && i.confidence === "inferred",
+            )
+          ? "inferred"
+          : "observed",
     },
     provenance: {
       executionTurnIds: activeIntervals.map((i) => i.turnId),

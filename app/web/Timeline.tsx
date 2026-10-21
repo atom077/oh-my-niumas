@@ -14,6 +14,7 @@ import {
   containsActivity,
   viewTime,
   placeItems,
+  providerTint,
   stairTurns,
   timelineRows,
   type PlacedItem,
@@ -57,6 +58,47 @@ export const tokens = (v: number | null) =>
 
 /** Grid paddings shared by the canvas and the fixed name column. */
 const GRID = { top: 35, bottom: 75 };
+
+/**
+ * Execution palette indexed by PROVIDER_CODE (codex, cursor, mixed); the last entry marks
+ * aborted/failed turns. Must stay in sync with the --run-* variables in style.css.
+ */
+const RUN_TINTS = [
+  { base: "#4b83e8", soft: "#80a8f0", ink: "#2f62c4" },
+  { base: "#2a2e36", soft: "#5d636f", ink: "#14161a" },
+  { base: "#5a6a8a", soft: "#8d9ab3", ink: "#3c4863" },
+  { base: "#d9876f", soft: "#edb3a2", ink: "#bb7867" },
+] as const;
+const stripeCache = new Map<number, string | { image: HTMLCanvasElement; repeat: "repeat" }>();
+/**
+ * Diagonal stripe fill for running-style bars. zrender accepts a canvas pattern object;
+ * outside a DOM (unit tests) it degrades to the flat base color.
+ */
+function stripes(tint: number) {
+  const cached = stripeCache.get(tint);
+  if (cached) return cached;
+  const { base, soft } = RUN_TINTS[tint] ?? RUN_TINTS[0];
+  if (typeof document === "undefined") return base;
+  const size = 10,
+    canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return base;
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = soft;
+  ctx.lineWidth = size / 2.8;
+  // Three offset strokes keep the "/" stripes seamless across tile edges.
+  ctx.beginPath();
+  for (const o of [-size, 0, size]) {
+    ctx.moveTo(o, size);
+    ctx.lineTo(o + size, 0);
+  }
+  ctx.stroke();
+  const pattern = { image: canvas, repeat: "repeat" as const };
+  stripeCache.set(tint, pattern);
+  return pattern;
+}
 
 const renderItem: NonNullable<CustomSeriesOption["renderItem"]> = (
   _params,
@@ -135,6 +177,29 @@ const renderItem: NonNullable<CustomSeriesOption["renderItem"]> = (
       style: { fill: "#283e66", stroke: "#fff", lineWidth: 1, opacity },
     };
   }
+  // Closed waits are a thin muted rail so execution keeps the visual weight.
+  if (kind === 1) {
+    const rail = Math.max(2, Math.round(half * 0.35));
+    return {
+      type: "rect",
+      shape: {
+        x: start[0],
+        y: start[1] - rail,
+        width: Math.max(end[0] - start[0], 2),
+        height: rail * 2,
+        r: rail,
+      },
+      style: {
+        fill: "#eeebe4",
+        stroke: "#d3ccbd",
+        lineWidth: 1,
+        lineDash: [3, 3],
+        opacity,
+      },
+    };
+  }
+  // Every execution bar is striped + dashed; color tells the AI source, status 1 overrides as abnormal.
+  const tint = status === 1 ? 3 : Number(api.value(8)) || 0;
   return {
     type: "rect",
     shape: {
@@ -145,22 +210,54 @@ const renderItem: NonNullable<CustomSeriesOption["renderItem"]> = (
       r: 4,
     },
     style: {
-      fill: kind === 1 ? "#fff2cf" : status ? "#edb3a2" : "#4b83e8",
-      stroke: kind === 1 ? "#c39748" : status ? "#bb7867" : "#4b83e8",
-      lineWidth: kind === 1 ? 1 : 0,
-      lineDash: kind === 1 ? [4, 3] : undefined,
+      fill: stripes(tint),
+      stroke: (RUN_TINTS[tint] ?? RUN_TINTS[0]).ink,
+      lineWidth: 1,
+      lineDash: [4, 3],
       opacity,
     },
   };
 };
 
-function Legend() {
+function Legend({ data }: { data: Analysis }) {
+  const providers = new Set(
+    data.intervals
+      .filter((i) => i.kind === "ai_active")
+      .map(
+        (i) => data.sessions.find((s) => s.id === i.sessionId)?.provider,
+      ),
+  );
   return (
     <div className="chart-legend">
-      <span>
-        <i className="legend-dot" />
-        AI 执行
-      </span>
+      {(providers.has("codex") || providers.has(undefined) || !providers.size) && (
+        <span>
+          <i className="legend-dot run-codex" />
+          {providers.has("cursor") ? "Codex 执行" : "AI 执行"}
+        </span>
+      )}
+      {providers.has("cursor") && (
+        <span>
+          <i className="legend-dot run-cursor" />
+          Cursor 推算执行
+        </span>
+      )}
+      {data.projects.some(
+        (p) =>
+          providerTint(
+            data.sessions.filter(
+              (s) =>
+                s.projectId === p.id &&
+                data.intervals.some(
+                  (i) => i.sessionId === s.id && i.kind === "ai_active",
+                ),
+            ),
+          ) === "mixed",
+      ) && (
+        <span>
+          <i className="legend-dot run-mixed" />
+          多来源项目汇总
+        </span>
+      )}
       <span>
         <i className="legend-dot waiting" />
         闭合等待
@@ -310,7 +407,9 @@ export function Timeline({
             ? `${head}${time(v[1])} · 输入观测事件`
             : `${head}${time(v[1])} — ${time(v[2])}<br/>${
                 v[3] === 1 ? "闭合等待" : "AI 执行"
-              } ${duration(v[2] - v[1])}<br/>点击查看会话`;
+              } ${duration(v[2] - v[1])}${
+                v[4] === 2 ? "<br/>按输入时间 + Cursor 记录时长推算" : ""
+              }<br/>点击查看会话`;
         },
       },
       xAxis: {
@@ -388,7 +487,7 @@ export function Timeline({
   return (
     <>
       <div className="timeline-toolbar">
-        <Legend />
+        <Legend data={data} />
         <div className="timeline-expansion">
           <button
             className="ghost-button"

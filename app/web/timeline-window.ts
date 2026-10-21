@@ -19,7 +19,8 @@ export function timelineItems(data: Analysis, showWait = true): TimelineItem[] {
         i.start,
         i.end,
         i.kind === "awaiting_user" ? 1 : 0,
-        i.status === "completed" ? 0 : 1,
+        // 0 observed completion, 1 aborted/failed, 2 Cursor-inferred boundary.
+        i.confidence === "inferred" ? 2 : i.status === "completed" ? 0 : 1,
       ],
       sessionId: i.sessionId,
       turnId: i.turnId,
@@ -181,9 +182,29 @@ function waitingOutsideActive(waits: TimeWindow[], active: TimeWindow[]) {
   return result;
 }
 
-/** value: [y, start, end, kind, abnormal, rowHeight, faded, targetY]; kind 4 is a stair connector. */
+/** Execution bars are tinted by AI source; a project row mixing sources gets a neutral tint. */
+export const PROVIDER_CODE = { codex: 0, cursor: 1, mixed: 2 } as const;
+export type ProviderTint = keyof typeof PROVIDER_CODE;
+
+/** Tint for a set of sessions: a single source keeps its color, several sources fall back to mixed. */
+export function providerTint(sessions: readonly Session[]): ProviderTint {
+  const set = new Set(sessions.map((s) => s.provider ?? "codex"));
+  return set.size > 1 ? "mixed" : set.has("cursor") ? "cursor" : "codex";
+}
+
+/** value: [y, start, end, kind, abnormal, rowHeight, faded, targetY, provider]; kind 4 is a stair connector. */
 export interface PlacedItem {
-  value: [number, number, number, number, number, number, number, number];
+  value: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
   sessionId: string;
   projectId?: string;
   label: string;
@@ -196,7 +217,10 @@ export function placeItems(
 ): PlacedItem[] {
   const sessionRows = new Map<string, TimelineRow>(),
     turnRows = new Map<string, TimelineRow>(),
-    names = new Map(data.sessions.map((s) => [s.id, s.name]));
+    names = new Map(data.sessions.map((s) => [s.id, s.name])),
+    tints = new Map(
+      data.sessions.map((s) => [s.id, PROVIDER_CODE[providerTint([s])]]),
+    );
   for (const row of rows)
     if (row.kind === "project") continue;
     else if (row.turnId) turnRows.set(`${row.sessionId}:${row.turnId}`, row);
@@ -205,7 +229,17 @@ export function placeItems(
   const put = (item: TimelineItem, row: TimelineRow, faded: boolean) => {
     const [, start, end, kind, abnormal] = item.value;
     placed.push({
-      value: [row.y, start, end, kind, abnormal, row.height, faded ? 1 : 0, 0],
+      value: [
+        row.y,
+        start,
+        end,
+        kind,
+        abnormal,
+        row.height,
+        faded ? 1 : 0,
+        0,
+        tints.get(item.sessionId) ?? 0,
+      ],
       sessionId: item.sessionId,
       label:
         (names.get(item.sessionId) ?? "") +
@@ -245,16 +279,37 @@ export function placeItems(
         )
       : [];
     const faded = ss.some((s) => sessionRows.has(s.id)) ? 1 : 0;
+    // Only sessions that actually drew execution decide the union's tint.
+    const tint =
+      PROVIDER_CODE[
+        providerTint(
+          ss.filter((s) =>
+            ii.some((i) => i.sessionId === s.id && i.kind === "ai_active"),
+          ),
+        )
+      ];
     for (const [kind, ranges] of [
       [0, active],
       [1, waits],
     ] as const)
       for (const range of ranges)
         placed.push({
-          value: [row.y, range.from, range.to, kind, 0, row.height, faded, 0],
+          value: [
+            row.y,
+            range.from,
+            range.to,
+            kind,
+            0,
+            row.height,
+            faded,
+            0,
+            tint,
+          ],
           sessionId: "",
           projectId: row.projectId,
-          label: `${project.name} · ${ss.length} 个会话`,
+          label: `${project.name} · ${ss.length} 个会话${
+            project.inferredWorkloadMs > 0 ? " · 含 Cursor 推算" : ""
+          }`,
         });
     const points = new Set<string>();
     for (const item of allItems) {
@@ -264,7 +319,7 @@ export function placeItems(
       if (points.has(pointKey)) continue;
       points.add(pointKey);
       placed.push({
-        value: [row.y, at, at, kind, 0, row.height, faded, 0],
+        value: [row.y, at, at, kind, 0, row.height, faded, 0, tint],
         sessionId: "",
         projectId: row.projectId,
         label: `${project.name} · ${ss.length} 个会话`,
@@ -283,7 +338,17 @@ export function placeItems(
     const at = turn?.start ?? turn?.end ?? turn?.observedAt ?? null;
     if (at === null) continue;
     placed.push({
-      value: [prev.y, at, at, 4, 0, next.height, 0, next.y],
+      value: [
+        prev.y,
+        at,
+        at,
+        4,
+        0,
+        next.height,
+        0,
+        next.y,
+        tints.get(next.sessionId) ?? 0,
+      ],
       sessionId: next.sessionId,
       label: names.get(next.sessionId) ?? "",
     });

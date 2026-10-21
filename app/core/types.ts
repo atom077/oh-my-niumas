@@ -17,10 +17,12 @@ export interface Turn {
   evidence: Evidence[];
   tokens: number | null;
   conflict?: boolean;
-  /** Cursor's recorded duration has no verified absolute terminal boundary. */
+  /** Cursor's recorded duration; no official API exposes the absolute terminal boundary. */
   reportedDurationMs?: number;
   /** Activity timestamp without a verified execution boundary. */
   observedAt?: number | null;
+  /** Cursor only: start/end are input time + recorded duration, cross-checked against the terminal message. */
+  timing?: "inferred";
 }
 export interface Usage {
   id: string;
@@ -70,7 +72,11 @@ export interface Session {
   recordSeen: boolean;
   conflictedUsageIds: string[];
   workloadMs: number;
+  /** Part of workloadMs that comes from inferred Cursor intervals. */
+  inferredWorkloadMs?: number;
   reportedWorkloadMs?: number | null;
+  /** Recorded duration of in-window turns that have no inferred interval; adding it to workloadMs never double counts. */
+  unlocatedReportedMs?: number | null;
   reportedTurns?: number;
   reportedTurnTotal?: number;
   spanMs: number | null;
@@ -91,7 +97,9 @@ export interface Query {
 }
 export interface Metrics {
   workloadMs: number;
+  inferredWorkloadMs: number;
   reportedWorkloadMs: number | null;
+  unlocatedReportedMs: number | null;
   reportedTurns: number;
   reportedTurnTotal: number;
   coverageMs: number;
@@ -113,13 +121,17 @@ export interface Interval {
   end: number;
   status: Status;
   kind: "ai_active" | "awaiting_user";
+  /** Inferred when either boundary comes from a Cursor recorded duration. */
+  confidence?: "observed" | "inferred";
 }
 export interface Project {
   id: string;
   name: string;
   sessionCount: number;
   workloadMs: number;
+  inferredWorkloadMs: number;
   reportedWorkloadMs: number | null;
+  unlocatedReportedMs: number | null;
   reportedTurns: number;
   reportedTurnTotal: number;
   tokens: number | null;

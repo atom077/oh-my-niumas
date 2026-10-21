@@ -39,3 +39,13 @@ Cursor 缓存位于现有 `.local/niumas.sqlite` 的独立表，按配置的根�
 
 
 2026-10-20 总览修正：记录累计由 Session 进一步汇总到 Metrics 和 Project；只选择 Cursor 时首卡直接展示记录累计，不再因绝对边界未知而隐藏已有记录。平均并行倍数未知时提示缺少可定位执行区间，不展示 0÷0。记录累计仍不参与覆盖和并发公式。
+
+## 2026-10-20 执行区间推算（取代上文“不补造执行条”）
+
+官方核验：Cursor 没有可读取历史桌面会话每轮结束时间或时长的公开接口。[Hooks](https://cursor.com/docs/hooks) 的 `stop` 只有 `status/loop_count` 与 Token，公共字段无时间戳；官方论坛[答复](https://forum.cursor.com/t/how-to-obtain-token-usage-per-request/168317)建议在 `beforeSubmitPrompt` 与 `stop` 自行打点并按 `generation_id` 相减，只对安装 Hook 之后的新轮次有效，且被打断的轮次存在[已知错配](https://forum.cursor.com/t/stop-hook-reports-the-wrong-generation-id-when-a-follow-up-prompt-aborts-an-in-progress-agent-turn/166471)。CLI `--print` 的 `duration_ms` 只覆盖无界面运行；企业 OpenTelemetry 导出无轮次区间；本机 `agent-transcripts` 无时间字段。项目保持只读，不安装 Hook。
+
+本机数据核验：`turnDurationMs`（桌面 “Worked for”）从用户消息 `createdAt` 开始计时。全部本机会话 208 轮带该值，其中 193 轮（约 93%）“输入 + 时长”与携带该值的结尾消息 `createdAt` 相差不超过 20 秒，中位 1.5 秒；首条助手 `startedAtMs` 一般晚于输入 2–25 秒，说明计时起点是提交而非模型响应。11 轮时长明显短于消息跨度（推测排除了批准等待，未验证），4 轮偏长。
+
+推算规则：轮次起点取用户消息 `createdAt`，终点取起点 + 最大 `turnDurationMs`；仅当终点与结尾消息相差不超过 `INFERENCE_TOLERANCE_MS`（20 秒）且不晚于下一次输入时采用，状态按 completed 推算（无法区分中止）。其余轮次保留 unknown 与活动点，不画执行条。推算区间带 `confidence: "inferred"`，参与工作量、活跃覆盖、并发与闭合等待（终点至下一次输入），对应 `confidence.timing/waiting` 为 inferred；页面执行条统一为斜纹虚线、按来源着色（Cursor 深色、Codex 蓝色），推算口径靠图例“Cursor 推算执行”、悬停文案与项目标注区分。Cursor 输入作为执行起点视为精确输入时间。
+
+记录值保持不变：`reportedWorkloadMs` 仍为窗口内按输入时间归属的全部记录时长；新增 `inferredWorkloadMs`（`workloadMs` 中的推算部分）与 `unlocatedReportedMs`（未通过校验轮次的记录时长）。混合主数值改为 `workloadMs + unlocatedReportedMs`，避免推算轮次被重复累计。重新扫描后本机 214 个输入驱动轮次中 190 轮获得推算区间。
