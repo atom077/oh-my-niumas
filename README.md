@@ -81,7 +81,7 @@ Configuration, development commands, platform notes, and troubleshooting live in
 
 Imports read your local AI history without modifying it. Computation and the metadata cache stay on your machine; raw prompts, tool output, and full filesystem paths are kept out of the cache and dashboard API. Existing session titles are displayed locally from indexes and kept in memory. The service binds to loopback.
 
-Codex timing comes from supported log boundaries. **Cursor execution intervals are inferred** only when local timing records pass consistency checks, and are labeled accordingly; other turns retain recorded durations or unknown activity. Cursor tokens are currently **N/A**. Coverage and concurrency use locatable intervals, including labeled inferences.
+Codex timing comes from supported log boundaries. **Cursor execution intervals are inferred** only when local timing records pass consistency checks, and are labeled accordingly; other turns retain recorded durations or unknown activity. Cursor does not record real token usage locally, so **token figures are not shown for Cursor sessions**; token metrics cover Codex only. Coverage and concurrency use locatable intervals, including labeled inferences.
 
 Waiting for your next input is not your working time. A long conversation is not continuous AI execution. Missing evidence stays missing. See [sources, formulas, and limitations](docs/TECHNICAL.md#data-and-metric-contracts).
 

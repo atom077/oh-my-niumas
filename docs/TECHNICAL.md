@@ -112,7 +112,7 @@ The latest rule supersedes earlier research notes that displayed Cursor activity
 4. Label the interval and derived timing **inferred**. Its completed state is also inferred and cannot reliably distinguish an interruption.
 5. Keep other turns as unknown activity with recorded duration where available; do not draw a located execution bar for them.
 
-Accepted inferred intervals participate in workload, coverage, concurrency, and closed waiting. Cursor tokens remain **N/A**: observed zero-valued fields have not been established as usage accounting.
+Accepted inferred intervals participate in workload, coverage, concurrency, and closed waiting. Cursor tokens are **not rendered**: local `tokenCount` is always zero and `usageData` is empty; real usage exists only in Cursor's cloud billing, which this read-only tool does not access. Token metrics and denominators cover Codex sessions only.
 
 | Field / metric | Meaning |
 | --- | --- |
@@ -168,7 +168,7 @@ Source symlinks are skipped or reported. Cursor does not query credentials or lo
 | Address already in use | Choose another `PORT` and open the printed URL. |
 | No local sessions | Select local data, scan, choose all dates / sources, and check scan details and roots. |
 | No Cursor sessions with a custom Codex root | Explicitly set `NIUMAS_CURSOR_ROOT`; the implicit root is disabled. |
-| Cursor tokens N/A, or turns without bars | Check coverage: usage fields or timing evidence may be insufficient. |
+| Cursor turns without bars | Check coverage: usage fields or timing evidence may be insufficient. |
 | No Codex waiting tracks | Recorded input times may be delayed; exact send times are required. |
 | Empty chart | Check filters and the drill-down hour; compare with the fixed demo URL. |
 | E2E cannot find Chrome | Adjust the browser configuration described above. |

@@ -18,7 +18,7 @@
 - `startedAtMs` / `completedAtMs` 出现在消息上。安装包 `bubbleTiming.js` 表明它们用于消息计时，无法证明整个多工具轮次的终止边界。
 - 终段消息可能有 `turnDurationMs`，安装包 `turnCollapsing.js` 使用这类值作为显示时长的候选。抽样中带该值的消息缺少 `completedAtMs`，因此不能用“最后消息创建时间”当整轮完成时刻，也不能从用户输入加该时长推算绝对终点。
 - 页面在会话列表及详情把 `turnDurationMs` 累计显示为“Cursor 记录时长”，多次出现取最大值作为该轮候选，与安装包折叠显示策略一致。列表标注记录覆盖轮数，缺少记录的轮次不补零；按该轮用户输入时间整笔归属，不能精确拆分跨日时长。该值未经桌面逐轮数值比对，与可定位的 `workloadMs` 保持独立，不参与活跃覆盖、等待或并发；混合来源主卡和项目累计按用户确认合计两类时长，并注明来源。轮次保留 `unknown` 和独立的活动时间戳；小时与分钟时间轴仅画已观测活动点，不补造执行条。
-- 所有抽样消息的 `tokenCount.inputTokens/outputTokens` 均为 `0`。未证明是计费用量，不能当作零消耗；当前 Cursor Token 一律 N/A。合并总览中 Codex 的已知计数不受影响，覆盖分母包含 Cursor。
+- 所有抽样消息的 `tokenCount.inputTokens/outputTokens` 均为 `0`。2026-10-21 复核：会话级 `usageData` 均为空对象，`contextTokensUsed` 仅为上下文窗口占用；官方文档只在云端 Admin API / 后台用量导出提供真实用量，本工具不接入。按用户决定，Cursor 会话不渲染任何 Token 信息；Token 指标及其覆盖分母只统计 Codex。
 
 仅 Cursor 时，首张卡显示“AI 累计时长 · Cursor 记录”、记录覆盖轮数及按输入时间归属说明；项目汇总也显示独立记录值。活跃覆盖和并发缺少绝对边界仍为 N/A。混合来源主数值为可定位工作量加 Cursor 记录累计，备注给出拆分；平均并行倍数仍使用可定位工作量除以其覆盖。数值接口的 workloadMs=0 表示已知执行区间的空集，不是 Cursor 记录时长为零；独立 reportedWorkloadMs 与覆盖计数提供记录值。
 

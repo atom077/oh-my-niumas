@@ -58,6 +58,66 @@ test("Cursor 推算区间：容差边界、越过下一次输入与缺少记录�
   assert.ok(s.issues.some((i) => i.includes("2 轮缺少记录时长")));
 });
 
+test("Cursor 迁移工作区或分叉留下的副本：同一轮只计一次", () => {
+  const t0 = Date.parse("2026-10-19T01:00:00Z");
+  const bubble = (
+    composer: string,
+    sourceId: string,
+    type: 1 | 2,
+    at: number,
+    reportedDurationMs: number | null = null,
+  ) => ({
+    id: `${composer}:${sourceId}`,
+    sourceId,
+    type,
+    at,
+    start: null,
+    completed: null,
+    reportedDurationMs,
+    simulated: false,
+  });
+  const turn1 = (c: string) => [
+    bubble(c, "u1", 1, t0),
+    bubble(c, "a1", 2, t0 + 30_000, 30_000),
+  ];
+  const turn2 = (c: string) => [
+    bubble(c, "u2", 1, t0 + 60_000),
+    bubble(c, "a2", 2, t0 + 90_000, 30_000),
+  ];
+  const project = {
+    projectId: "p",
+    projectName: "p",
+    projectEvidence: "folder" as const,
+  };
+  const { sessions, issues } = normalizeCursor([
+    // Archived original, then the moved copy that continues the chat.
+    { ...project, id: "old", createdAt: t0, bubbles: turn1("old") },
+    {
+      ...project,
+      id: "moved",
+      createdAt: t0 + 40_000,
+      bubbles: [...turn1("moved"), ...turn2("moved")],
+    },
+    // A fork that diverges keeps only its new turn.
+    {
+      ...project,
+      id: "fork",
+      createdAt: t0 + 100_000,
+      bubbles: [
+        ...turn1("fork"),
+        bubble("fork", "u3", 1, t0 + 120_000),
+        bubble("fork", "a3", 2, t0 + 130_000, 10_000),
+      ],
+    },
+  ]);
+  // Equal-size copies of the shared first turn go to the newest composer; the original disappears.
+  assert.deepEqual(
+    sessions.map((s) => s.inputs.map((i) => i.at)),
+    [[t0 + 60_000], [t0, t0 + 120_000]],
+  );
+  assert.ok(issues[0].includes("合并 1 个"));
+});
+
 test("Cursor v18：消息头分页存储于 composerConvHeaders，含子消息 ID", async () => {
   const root = await mkdtemp(join(tmpdir(), "niumas-cursor-v18-"));
   try {

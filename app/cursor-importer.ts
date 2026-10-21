@@ -46,6 +46,8 @@ async function regular(path: string) {
 
 interface Bubble {
   id: string;
+  /** Raw Cursor bubbleId; a moved or forked chat copies it into the new composer unchanged. */
+  sourceId?: string;
   type: number;
   at: number | null;
   start: number | null;
@@ -59,7 +61,60 @@ interface Projection {
   projectName: string;
   /** folder: single workspace directory; workspace: multi-root .code-workspace file, not attributed to any one repo. */
   projectEvidence: "folder" | "workspace" | "unknown";
+  /** composerData.createdAt; breaks ties between copies in favour of the newer composer. */
+  createdAt?: number | null;
   bubbles: Bubble[];
+}
+
+/**
+ * Moving a chat to another workspace (or forking it) archives the original composer and creates a new one
+ * that repeats the same bubbleIds. Each turn, keyed by its user bubbleId, is kept in exactly one composer:
+ * the copy holding the most bubbles for it, then the newer composer. Composers left without turns disappear.
+ * @returns Projections with duplicate turns removed, and how many composers were fully absorbed.
+ */
+export function dedupeCursorCopies(projections: Projection[]) {
+  const groups = projections.map((p) => {
+    // A leading run before the first user bubble belongs to no turn and is kept as-is.
+    const out: { key: string | null; bubbles: Bubble[] }[] = [
+      { key: null, bubbles: [] },
+    ];
+    for (const b of p.bubbles) {
+      if (b.type === 1 && !b.simulated)
+        out.push({ key: b.sourceId ?? b.id, bubbles: [] });
+      out[out.length - 1].bubbles.push(b);
+    }
+    return out;
+  });
+  const owner = new Map<string, { index: number; size: number }>();
+  groups.forEach((gs, index) => {
+    for (const g of gs) {
+      if (g.key === null) continue;
+      const cur = owner.get(g.key);
+      const newer =
+        cur !== undefined &&
+        (projections[index].createdAt ?? 0) >
+          (projections[cur.index].createdAt ?? 0);
+      if (
+        !cur ||
+        g.bubbles.length > cur.size ||
+        (g.bubbles.length === cur.size && newer)
+      )
+        owner.set(g.key, { index, size: g.bubbles.length });
+    }
+  });
+  let absorbed = 0;
+  const result = projections.map((p, index) => {
+    const kept = groups[index].filter(
+      (g) => g.key === null || owner.get(g.key)!.index === index,
+    );
+    if (
+      groups[index].some((g) => g.key !== null) &&
+      !kept.some((g) => g.key !== null)
+    )
+      absorbed++;
+    return { ...p, bubbles: kept.flatMap((g) => g.bubbles) };
+  });
+  return { projections: result, absorbed };
 }
 export interface CursorStatus {
   databases: number;
@@ -70,7 +125,8 @@ export interface CursorStatus {
 }
 export function normalizeCursor(projections: Projection[]): Dataset {
   const sessions: Session[] = [];
-  for (const p of projections) {
+  const deduped = dedupeCursorCopies(projections);
+  for (const p of deduped.projections) {
     // Reuse the established empty-session defaults, without translating Cursor messages into Codex events.
     const s = normalizeSources([
       {
@@ -148,7 +204,6 @@ export function normalizeCursor(projections: Projection[]): Dataset {
       s.issues.push(
         `Cursor ${unlocated} 轮缺少记录时长或与消息跨度不一致，未绘制执行区间`,
       );
-    s.issues.push("Cursor Token 计数语义未验证，零值不代表零消耗，显示 N/A");
     if (p.projectEvidence === "unknown")
       s.issues.push("Cursor 缺少单目录工作区证据，项目归属未知");
     else if (p.projectEvidence === "workspace")
@@ -166,7 +221,14 @@ export function normalizeCursor(projections: Projection[]): Dataset {
     }
     sessions.push(s);
   }
-  return { sessions, issues: [] };
+  return {
+    sessions,
+    issues: deduped.absorbed
+      ? [
+          `Cursor 合并 ${deduped.absorbed} 个迁移工作区或分叉留下的会话副本，重复轮次只计一次`,
+        ]
+      : [],
+  };
 }
 
 /** Reads only allowlisted metadata. No chat text, tools, authentication rows or original JSON leave SQLite. */
@@ -285,6 +347,7 @@ export async function scanCursor(root: string) {
           `SELECT key, length(value) AS size,
         CASE WHEN length(value)<=? AND json_valid(value) THEN json_object(
         'composerId',json_extract(value,'$.composerId'),
+        'createdAt',json_extract(value,'$.createdAt'),
         'workspaceIdentifier',json_extract(value,'$.workspaceIdentifier'),
         'subagentInfo',json_type(value,'$.subagentInfo'),
         'isBestOfNSubcomposer',json_extract(value,'$.isBestOfNSubcomposer'),
@@ -403,6 +466,7 @@ export async function scanCursor(root: string) {
             : workspaceFile
               ? "workspace"
               : "unknown",
+          createdAt: at(m.createdAt),
           bubbles: [],
         };
         const seen = new Set<string>();
@@ -426,6 +490,7 @@ export async function scanCursor(root: string) {
           if (b.type !== 1 && b.type !== 2) continue;
           projection.bubbles.push({
             id: key(`cursor:${id}:${bid}`),
+            sourceId: bid,
             type: b.type,
             at: at(b.createdAt),
             start: at(b.startedAtMs),
@@ -453,7 +518,9 @@ export async function scanCursor(root: string) {
     }
   }
   status.issues = [...new Set(status.issues)];
-  status.sessions = normalizeCursor([...projections.values()]).sessions.length;
+  const normalized = normalizeCursor([...projections.values()]);
+  status.sessions = normalized.sessions.length;
+  status.issues.push(...normalized.issues);
   if (status.excluded)
     status.issues.push(
       `Cursor 排除 ${status.excluded} 个子 Agent、分支或无效会话`,

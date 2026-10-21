@@ -259,6 +259,9 @@ export function App() {
     (provider === "cursor" ||
       (data.sessions.length > 0 &&
         data.sessions.every((s) => s.provider === "cursor")));
+  /** Cursor exposes no usable token accounting locally, so token figures only describe Codex sessions. */
+  const codexSessions =
+    data?.sessions.filter((s) => s.provider !== "cursor").length ?? 0;
   const title = pages.find((p) => p.id === page)!;
   const viewScope = JSON.stringify([
     source,
@@ -555,7 +558,7 @@ export function App() {
                 data.sessions.some((s) => s.provider === "cursor") && (
                   <p className="table-note cursor-coverage" role="note">
                     Cursor 执行区间按输入时间 + 记录时长推算（深色执行条），与结尾消息相差超过
-                    20 秒的轮次不绘制，只计记录时长；Cursor 未提供官方轮次边界，Token 未验证。
+                    20 秒的轮次不绘制，只计记录时长；Cursor 未提供官方轮次边界。
                   </p>
                 )}
               {page === "overview" && (
@@ -636,13 +639,11 @@ export function App() {
                         : "缺少可定位的执行区间"
                     }
                   />
-                  {page === "overview" ? (
+                  {page === "overview" && !cursorOnly ? (
                     <Metric
                       label="已知 Token"
                       value={tokens(metrics!.tokens)}
-                      note={`${metrics!.tokenSessions}/${
-                        data.sessions.length
-                      } 会话有计数 · 按上报时间归属`}
+                      note={`${metrics!.tokenSessions}/${codexSessions} 个 Codex 会话有计数 · 按上报时间归属`}
                     />
                   ) : (
                     <Metric
@@ -730,7 +731,7 @@ export function App() {
                           <th>会话</th>
                           <th>AI 工作量</th>
                           <th>已知闭合等待</th>
-                          <th>已知 Token</th>
+                          {!cursorOnly && <th>已知 Token</th>}
                           <th>会话详情</th>
                         </tr>
                       </thead>
@@ -775,7 +776,17 @@ export function App() {
                               </span>
                             </td>
                             <td>{duration(p.waitingMs)}</td>
-                            <td>{tokens(p.tokens)}</td>
+                            {!cursorOnly && (
+                              <td>
+                                {data.sessions.some(
+                                  (s) =>
+                                    s.projectId === p.id &&
+                                    s.provider !== "cursor",
+                                )
+                                  ? tokens(p.tokens)
+                                  : null}
+                              </td>
+                            )}
                             <td>
                               <button
                                 className="text-button"
@@ -838,7 +849,7 @@ export function App() {
                               <th>项目</th>
                               <th>AI 执行累计</th>
                               <th>会话跨度</th>
-                              <th>已知 Token</th>
+                              {!cursorOnly && <th>已知 Token</th>}
                               <th>轮次</th>
                             </tr>
                           </thead>
@@ -889,7 +900,13 @@ export function App() {
                                   )}
                                 </td>
                                 <td>{duration(s.spanMs)}</td>
-                                <td>{tokens(s.tokens)}</td>
+                                {!cursorOnly && (
+                                  <td>
+                                    {s.provider === "cursor"
+                                      ? null
+                                      : tokens(s.tokens)}
+                                  </td>
+                                )}
                                 <td>
                                   {
                                     s.turns.filter(
@@ -956,7 +973,10 @@ export function App() {
               </details>
               <footer>
                 <span>以前我是牛马，现在我是牛马的项目经理。</span>
-                <span>等待 ≠ 人工投入 · 跨度 ≠ 执行</span>
+                <span>
+                  等待是 AI 答完到你再次发消息的间隔，不算你的投入时间 ·
+                  跨度是会话首尾的时间差，不等于 AI 实际执行时长
+                </span>
               </footer>
             </>
           )}
@@ -1051,10 +1071,12 @@ function SessionDetail({
             ? "待下次输入（开放等待不累计）"
             : "无开放等待"}
         </span>
-        <span>
-          已知 Token {tokens(s.tokens)} ·{" "}
-          {s.tokenComplete ? "记录路径基线完整" : "覆盖不完整或未知"}
-        </span>
+        {s.provider !== "cursor" && (
+          <span>
+            已知 Token {tokens(s.tokens)} ·{" "}
+            {s.tokenComplete ? "记录路径基线完整" : "覆盖不完整或未知"}
+          </span>
+        )}
       </div>
       <div className="turns">
         {selected.map((t, i) => {
@@ -1081,8 +1103,8 @@ function SessionDetail({
                     ? "N/A"
                     : duration(
                         interval ? interval.end - interval.start : 0,
-                      )}{" "}
-                  · Token {tokens(t.tokens)}
+                      )}
+                  {s.provider !== "cursor" && ` · Token ${tokens(t.tokens)}`}
                   {t.reportedDurationMs !== undefined && (
                     <span className="reported-duration">
                       {" "}
@@ -1121,26 +1143,29 @@ function SessionDetail({
               ? "会话标题来自 Codex 会话索引。 "
               : "索引中暂无该会话标题，显示为未命名会话。 ")}
           来源 {data.source === "demo" ? "合成样例" : "本机只读白名单"}；
-          {s.turns.reduce((a, t) => a + t.evidence.length, 0)} 条边界证据。Token
-          路径：{s.tokenMode}。日志版本：{s.versions.join(" / ") || "未记录"}。
+          {s.turns.reduce((a, t) => a + t.evidence.length, 0)} 条边界证据。
+          {s.provider !== "cursor" && `Token 路径：${s.tokenMode}。`}
+          日志版本：{s.versions.join(" / ") || "未记录"}。
         </p>
-        <p>
-          {s.tokenMode === "record"
-            ? `输入 ${tokens(
-                usage.reduce((a, u) => a + u.input, 0),
-              )} / 缓存 ${tokens(
-                usage.every((u) => u.cached !== null)
-                  ? usage.reduce((a, u) => a + (u.cached ?? 0), 0)
-                  : null,
-              )}（输入子集）/ 输出 ${tokens(
-                usage.reduce((a, u) => a + u.output, 0),
-              )} / 推理 ${tokens(
-                usage.every((u) => u.reasoning !== null)
-                  ? usage.reduce((a, u) => a + (u.reasoning ?? 0), 0)
-                  : null,
-              )}（输出子集）`
-            : "分项或轮次 Token 不足以确定，显示 N/A。"}
-        </p>
+        {s.provider !== "cursor" && (
+          <p>
+            {s.tokenMode === "record"
+              ? `输入 ${tokens(
+                  usage.reduce((a, u) => a + u.input, 0),
+                )} / 缓存 ${tokens(
+                  usage.every((u) => u.cached !== null)
+                    ? usage.reduce((a, u) => a + (u.cached ?? 0), 0)
+                    : null,
+                )}（输入子集）/ 输出 ${tokens(
+                  usage.reduce((a, u) => a + u.output, 0),
+                )} / 推理 ${tokens(
+                  usage.every((u) => u.reasoning !== null)
+                    ? usage.reduce((a, u) => a + (u.reasoning ?? 0), 0)
+                    : null,
+                )}（输出子集）`
+              : "分项或轮次 Token 不足以确定，显示 N/A。"}
+          </p>
+        )}
         <ul>
           {s.issues.map((i) => (
             <li key={i}>{i}</li>
