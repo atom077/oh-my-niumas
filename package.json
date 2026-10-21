@@ -1,6 +1,8 @@
 {
   "name": "oh-my-niumas",
   "version": "0.1.0",
+  "description": "A local-first AI agent collaboration dashboard for Codex and Cursor.",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "engines": {
