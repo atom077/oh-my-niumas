@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtemp, cp, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, cp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../app/server.ts";
 import {
   INFERENCE_TOLERANCE_MS,
   normalizeCursor,
+  scanCursor,
 } from "../app/cursor-importer.ts";
 import { cursorFixture } from "./helpers/cursor-fixture.ts";
 
@@ -32,7 +33,7 @@ test("Cursor 推算区间：容差边界、越过下一次输入与缺少记录�
       id: "edge",
       projectId: "p",
       projectName: "p",
-      projectKnown: true,
+      projectEvidence: "folder",
       bubbles: [
         // Exactly at tolerance: accepted.
         bubble("u1", 1, t0),
@@ -55,6 +56,67 @@ test("Cursor 推算区间：容差边界、越过下一次输入与缺少记录�
     ],
   );
   assert.ok(s.issues.some((i) => i.includes("2 轮缺少记录时长")));
+});
+
+test("Cursor v18：消息头分页存储于 composerConvHeaders，含子消息 ID", async () => {
+  const root = await mkdtemp(join(tmpdir(), "niumas-cursor-v18-"));
+  try {
+    await mkdir(join(root, "globalStorage"));
+    const db = new DatabaseSync(join(root, "globalStorage", "state.vscdb"));
+    db.exec("CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value TEXT)");
+    const put = (k: string, v: unknown) =>
+      db
+        .prepare("INSERT INTO cursorDiskKV VALUES (?,?)")
+        .run(k, JSON.stringify(v));
+    const id = "v18-session",
+      t0 = Date.parse("2026-10-21T02:00:00Z");
+    put(`composerData:${id}`, {
+      _v: 18,
+      composerId: id,
+      lastUpdatedAt: t0 + 60_000,
+      workspaceIdentifier: {
+        id: "multi",
+        configPath: { scheme: "file", path: "/synthetic/demo.code-workspace" },
+      },
+      fullConversationHeadersOnly: [],
+      conversationMap: {},
+    });
+    // Turn split across two pages; the terminal sub-bubble carries the turn duration.
+    const turn = [
+      ["u1", 1, 0, null],
+      ["u1/s:0", 2, 5_000, null],
+      ["u1/t:call-1\nfc_1_0", 2, 9_000, null],
+      ["u1/s:1", 2, 28_000, 30_000],
+    ] as const;
+    put(
+      `composerConvHeaders:${id}:000000`,
+      turn.slice(0, 2).map(([bubbleId, type]) => ({ bubbleId, type })),
+    );
+    put(
+      `composerConvHeaders:${id}:000001`,
+      turn.slice(2).map(([bubbleId, type]) => ({ bubbleId, type })),
+    );
+    for (const [bid, type, offset, turnDurationMs] of turn)
+      put(`bubbleId:${id}:${bid}`, {
+        type,
+        createdAt: new Date(t0 + offset).toISOString(),
+        ...(turnDurationMs ? { turnDurationMs } : {}),
+      });
+    db.close();
+    const { projections, status } = await scanCursor(root);
+    assert.equal(projections?.length, 1);
+    assert.equal(status.messages, 4, "两页消息头全部读取");
+    assert.equal(projections![0].projectName, "demo（多目录）");
+    assert.equal(projections![0].projectEvidence, "workspace");
+    const [s] = normalizeCursor(projections!).sessions;
+    assert.equal(s.turns.length, 1);
+    assert.deepEqual(
+      [s.turns[0].start, s.turns[0].end, s.turns[0].timing],
+      [t0, t0 + 30_000, "inferred"],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("Cursor HTTP 接入：来源隔离、推算区间、只读隐私、刷新与重启", async () => {

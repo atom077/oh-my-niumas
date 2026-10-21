@@ -57,7 +57,8 @@ interface Projection {
   id: string;
   projectId: string;
   projectName: string;
-  projectKnown: boolean;
+  /** folder: single workspace directory; workspace: multi-root .code-workspace file, not attributed to any one repo. */
+  projectEvidence: "folder" | "workspace" | "unknown";
   bubbles: Bubble[];
 }
 export interface CursorStatus {
@@ -148,8 +149,12 @@ export function normalizeCursor(projections: Projection[]): Dataset {
         `Cursor ${unlocated} 轮缺少记录时长或与消息跨度不一致，未绘制执行区间`,
       );
     s.issues.push("Cursor Token 计数语义未验证，零值不代表零消耗，显示 N/A");
-    if (!p.projectKnown)
+    if (p.projectEvidence === "unknown")
       s.issues.push("Cursor 缺少单目录工作区证据，项目归属未知");
+    else if (p.projectEvidence === "workspace")
+      s.issues.push(
+        "Cursor 会话属于多目录工作区，按工作区文件分组，未归属到其中任一仓库",
+      );
     else s.issues.push("Cursor 项目按工作区目录归属，不能证明是会话起始 cwd");
     s.activityTimes = [...new Set(times)];
     // Inferred ends may trail the last stored message slightly; keep them inside the session extent.
@@ -176,6 +181,8 @@ export async function scanCursor(root: string) {
   const titles = new Map<string, string>();
   const paths: string[] = [];
   const folders = new Map<string, string>();
+  /** Workspace storage id → multi-root .code-workspace path. */
+  const workspaceFiles = new Map<string, string>();
   const projections = new Map<string, Projection>();
   try {
     if (!(await regular(root)).isDirectory()) throw Error("not a directory");
@@ -216,8 +223,10 @@ export async function scanCursor(root: string) {
         const data = JSON.parse(await readFile(path, "utf8"));
         const folder = folderPath(data.folder);
         if (folder) folders.set(entry.name, folder);
+        const workspaceFile = folderPath(data.workspace);
+        if (workspaceFile) workspaceFiles.set(entry.name, workspaceFile);
       } catch {
-        /* A multi-root/empty workspace has no proven single directory. */
+        /* An empty/unreadable workspace has no proven directory or workspace file. */
       }
     }
   } catch (e) {
@@ -282,9 +291,27 @@ export async function scanCursor(root: string) {
         'headerCount',json_array_length(value,'$.fullConversationHeadersOnly'),
         'headers',(SELECT json_group_array(json_object('bubbleId',json_extract(h.value,'$.bubbleId')))
           FROM (SELECT value FROM json_each(cursorDiskKV.value,'$.fullConversationHeadersOnly') LIMIT 20000) h)) END AS metadata
-        FROM cursorDiskKV WHERE key GLOB 'composerData:*' ORDER BY key LIMIT ?`,
+        FROM cursorDiskKV WHERE key GLOB 'composerData:*'
+        ORDER BY CASE WHEN json_valid(value) THEN json_extract(value,'$.lastUpdatedAt') END DESC, key LIMIT ?`,
         )
         .iterate(MAX_VALUE, MAX_SESSIONS + 1);
+      /**
+       * Cursor composerData v18+ leaves fullConversationHeadersOnly empty and pages headers into
+       * composerConvHeaders:<id>:000000, :000001 … (zero-padded, so key order is page order).
+       */
+      const pageStmt = db.prepare(
+        `SELECT length(value) AS size, CASE WHEN length(value)<=? AND json_valid(value) THEN
+        (SELECT json_group_array(json_object('bubbleId',json_extract(h.value,'$.bubbleId')))
+          FROM (SELECT value FROM json_each(cursorDiskKV.value) LIMIT 20000) h) END AS headers
+        FROM cursorDiskKV WHERE key > ? AND key < ? ORDER BY key`,
+      );
+      const bubbleStmt = db.prepare(
+        `SELECT length(value) AS size, CASE WHEN length(value)<=? AND json_valid(value) THEN json_object(
+        'type',json_extract(value,'$.type'), 'createdAt',json_extract(value,'$.createdAt'),
+        'startedAtMs',json_extract(value,'$.startedAtMs'), 'completedAtMs',json_extract(value,'$.completedAtMs'),
+        'turnDurationMs',json_extract(value,'$.turnDurationMs'), 'isSimulatedMsg',json_extract(value,'$.isSimulatedMsg')) END AS metadata
+        FROM cursorDiskKV WHERE key=?`,
+      );
       let inspected = 0;
       for (const row of rows) {
         if (++inspected > MAX_SESSIONS) {
@@ -321,25 +348,61 @@ export async function scanCursor(root: string) {
         }
         const sessionKey = key(`cursor:${id}`);
         if (projections.has(sessionKey)) continue;
-        const hs = Array.isArray(m.headers) ? m.headers : [];
+        const hs: unknown[] = Array.isArray(m.headers) ? m.headers : [];
+        if (!hs.length) {
+          m.headerCount = 0;
+          // ';' is the code point after ':', so the range covers exactly this composer's pages.
+          for (const page of pageStmt.iterate(
+            MAX_VALUE,
+            `composerConvHeaders:${id}:`,
+            `composerConvHeaders:${id};`,
+          )) {
+            bytes += Number(page.size);
+            if (!page.headers) {
+              status.issues.push("Cursor 部分消息页过大或无效，覆盖不完整");
+              continue;
+            }
+            const items = JSON.parse(String(page.headers));
+            m.headerCount += items.length;
+            if (hs.length < MAX_MESSAGES)
+              hs.push(...items.slice(0, MAX_MESSAGES - hs.length));
+          }
+        }
         if (m.headerCount > MAX_MESSAGES)
           status.issues.push("Cursor 单会话消息超过 20000 条，覆盖不完整");
         if (!hs.length) continue; // Drafts are not sessions with observed input.
+        const workspaceId = String(
+          obj(m.workspaceIdentifier).id ?? header.workspaceId,
+        );
         const folder =
           folderPath(obj(m.workspaceIdentifier).uri) ??
           folderPath(obj(header.workspaceIdentifier).uri) ??
-          folders.get(
-            String(obj(m.workspaceIdentifier).id ?? header.workspaceId),
-          );
+          folders.get(workspaceId);
+        // Multi-root workspaces list several repos; group by the workspace file instead of guessing one.
+        const workspaceFile = folder
+          ? undefined
+          : (folderPath(obj(m.workspaceIdentifier).configPath) ??
+            folderPath(obj(header.workspaceIdentifier).configPath) ??
+            workspaceFiles.get(workspaceId));
         const projection: Projection = {
           id: sessionKey,
           projectId: folder
             ? key(folder)
-            : key(`cursor:unassigned:${obj(m.workspaceIdentifier).id ?? id}`),
+            : workspaceFile
+              ? key(`cursor:workspace:${workspaceFile}`)
+              : key(
+                  `cursor:unassigned:${obj(m.workspaceIdentifier).id ?? id}`,
+                ),
           projectName: folder
             ? projectDirectoryName(folder)
-            : "Cursor · 未知工作区",
-          projectKnown: Boolean(folder),
+            : workspaceFile
+              ? `${projectDirectoryName(workspaceFile.replace(/\.code-workspace$/i, ""))}（多目录）`
+              : "Cursor · 未知工作区",
+          projectEvidence: folder
+            ? "folder"
+            : workspaceFile
+              ? "workspace"
+              : "unknown",
           bubbles: [],
         };
         const seen = new Set<string>();
@@ -353,15 +416,7 @@ export async function scanCursor(root: string) {
           const bid = safeId(obj(h).bubbleId);
           if (!bid || seen.has(bid)) continue;
           seen.add(bid);
-          const bRow = db
-            .prepare(
-              `SELECT length(value) AS size, CASE WHEN length(value)<=? AND json_valid(value) THEN json_object(
-            'type',json_extract(value,'$.type'), 'createdAt',json_extract(value,'$.createdAt'),
-            'startedAtMs',json_extract(value,'$.startedAtMs'), 'completedAtMs',json_extract(value,'$.completedAtMs'),
-            'turnDurationMs',json_extract(value,'$.turnDurationMs'), 'isSimulatedMsg',json_extract(value,'$.isSimulatedMsg')) END AS metadata
-            FROM cursorDiskKV WHERE key=?`,
-            )
-            .get(MAX_VALUE, `bubbleId:${id}:${bid}`);
+          const bRow = bubbleStmt.get(MAX_VALUE, `bubbleId:${id}:${bid}`);
           if (!bRow?.metadata) {
             status.issues.push("Cursor 部分消息缺失、过大或无效，覆盖不完整");
             continue;

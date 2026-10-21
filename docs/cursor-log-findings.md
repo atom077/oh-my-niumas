@@ -8,7 +8,7 @@
 
 - `globalStorage/state.vscdb`：`cursorDiskKV` 中 `composerData:<id>` 保存会话和有序消息引用；`bubbleId:<composer>:<bubble>` 保存消息；`composerHeaders` 提供名称、工作区和子 Agent 标记。
 - `workspaceStorage/*/state.vscdb`：发现相同结构时一并读取，按带 `cursor:` 命名空间的会话标识去重。不是把 workspace 副本重复相加。
-- `workspaceStorage/*/workspace.json`：仅单目录 `folder` 用于关联工作区。多根工作区不猜测目录；会话自带的 `workspaceIdentifier.uri` 优先。目录匿名方式与 Codex 相同，因此同目录可自然归为一个项目，但这只是工作区证据，不能声称已验证为会话起始 cwd。
+- `workspaceStorage/*/workspace.json`：仅单目录 `folder` 用于关联工作区。多根工作区不猜测目录，而是按 `.code-workspace` 文件（会话 `workspaceIdentifier.configPath` 或 `workspace.json` 的 `workspace`）单独分组，显示为「<工作区名>（多目录）」，不归属到其中任一仓库；会话自带的 `workspaceIdentifier.uri` 优先。目录匿名方式与 Codex 相同，因此同目录可自然归为一个项目，但这只是工作区证据，不能声称已验证为会话起始 cwd。
 
 实测：12 个数据库、65 个可展示会话、204 次输入驱动轮次；排除 7 个子 Agent/分支会话，194 轮包含可展示的记录时长。存在部分不可用消息，覆盖不完整。这些数字是本次快照，不是跨版本保证。空草稿、无用户输入的记录不当作已使用会话。支持本机桌面会话，不宣称覆盖旧版 `aiService` 聊天、云端 Agent 或所有 CLI 格式。
 
