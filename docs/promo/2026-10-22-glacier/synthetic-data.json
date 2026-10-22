@@ -1,0 +1,86 @@
+{
+  "synthetic": true,
+  "date": "2026-10-22",
+  "sessionCount": 10,
+  "workloadMinutes": 300,
+  "knownCodexTokens": 540000,
+  "projects": [
+    {
+      "name": "前端应用",
+      "sessions": 4,
+      "codexSessions": 3,
+      "cursorSessions": 1,
+      "workloadMinutes": 120,
+      "closedWaitingMinutes": 35,
+      "knownCodexTokens": 240000
+    },
+    {
+      "name": "数据服务",
+      "sessions": 3,
+      "codexSessions": 3,
+      "cursorSessions": 0,
+      "workloadMinutes": 90,
+      "closedWaitingMinutes": 20,
+      "knownCodexTokens": 180000
+    },
+    {
+      "name": "移动应用",
+      "sessions": 2,
+      "codexSessions": 1,
+      "cursorSessions": 1,
+      "workloadMinutes": 60,
+      "closedWaitingMinutes": 15,
+      "knownCodexTokens": 120000
+    },
+    {
+      "name": "文档中心",
+      "sessions": 1,
+      "codexSessions": 0,
+      "cursorSessions": 1,
+      "workloadMinutes": 30,
+      "closedWaitingMinutes": 10,
+      "knownCodexTokens": null
+    }
+  ],
+  "featuredSession": {
+    "name": "首页体验优化",
+    "project": "前端应用",
+    "provider": "Codex",
+    "workloadMinutes": 45,
+    "spanMinutes": 60,
+    "closedWaitingMinutes": 15,
+    "tokens": 108000,
+    "turns": [
+      {
+        "start": "09:00",
+        "end": "09:10",
+        "minutes": 10,
+        "tokens": 24000
+      },
+      {
+        "start": "09:15",
+        "end": "09:23",
+        "minutes": 8,
+        "tokens": 18000
+      },
+      {
+        "start": "09:25",
+        "end": "09:37",
+        "minutes": 12,
+        "tokens": 28000
+      },
+      {
+        "start": "09:40",
+        "end": "09:45",
+        "minutes": 5,
+        "tokens": 12000
+      },
+      {
+        "start": "09:50",
+        "end": "10:00",
+        "minutes": 10,
+        "tokens": 26000
+      }
+    ]
+  }
+}

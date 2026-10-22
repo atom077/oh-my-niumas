@@ -11,9 +11,9 @@ A local-first dashboard for developers working with several AI sessions at once.
 
 > “Niu ma” (牛马, literally “cattle and horses”) is Chinese internet slang for an overworked worker. Here, the joke is on us: we finally got AI to do the work—and became project managers.
 
-![Overview: a calm workspace for projects, AI workload, and collaboration](docs/screenshots/overview.png)
+![Overview: a calm workspace for projects, AI workload, and collaboration](docs/promo/2026-10-22-glacier/overview.png)
 
-*Actual application, synthetic demo data. The interface is currently in Simplified Chinese; an English UI is on the roadmap.*
+*Promotional UI mockups using synthetic example data. The interface is currently in Simplified Chinese; an English UI is on the roadmap.*
 
 ## Why this exists
 
@@ -33,11 +33,15 @@ A chat history tells you what was said. A token counter tells you how much was u
 
 ### See the whole day, then find the moment
 
-The timeline is the heart of the product: **daily project activity → hourly session collaboration → individual turns**. Follow a busy patch into an hour, open a session, and zoom a short response down to seconds. Your headline totals stay anchored to the selected date range while you explore.
+The timeline is the heart of the product: **daily project activity → hourly collaboration → individual turns**. See which sessions overlap within an hour and where they wait, then select a turn to inspect its start, end, and duration to the second. Your headline totals stay anchored to the selected date range while you drill down and zoom.
 
-![Hourly collaboration: parallel sessions, execution bars, input points, and closed waits](docs/screenshots/layered-hour.png)
+![Hourly timeline: five sessions across three projects share one time axis, with overlapping execution, input activity, and closed waits](docs/promo/2026-10-22-glacier/timeline-hour.png)
 
-*Execution, input activity, and closed waits have separate visual meanings. Waiting is shown only where the source supports it.*
+**Hourly collaboration: see parallel work at a glance.** Expand projects into sessions on a shared clock. Codex execution, inferred Cursor execution, input points, and closed waits have distinct visual meanings, making overlaps and gaps visible.
+
+![Turn timeline: separate execution and waiting per turn, with an 11-second response selected and exact timestamps plus a zoom action](docs/promo/2026-10-22-glacier/timeline-turns.png)
+
+**Individual turns: inspect one response closely.** Each turn has its own row, positioned by time. Select the example's 11-second response to see its exact boundaries, then choose “放大这一轮” (Zoom into this turn) to look closer. Closed waits appear only where supported by evidence; they are not human working time.
 
 ### Feel the parallelism
 
@@ -47,16 +51,16 @@ Three sessions can produce **100 minutes of AI work in 50 minutes of active wall
 
 Give projects readable aliases, merge related directories into one project, restore their original grouping, and add searchable session notes. Your labels survive refreshes and restarts. Optional 15 / 30 / 60-second refresh keeps local activity up to date while the page is visible.
 
+![Projects: compare session counts, AI workload, closed waiting, and known tokens](docs/promo/2026-10-22-glacier/projects.png)
+
 <details>
-<summary>More of the working product: projects and a single-turn close-up</summary>
+<summary>Session details: execution totals, conversation span, and turn records</summary>
 
-![Projects: compare sessions and AI work across your projects](docs/screenshots/projects.png)
-
-![Turn close-up: zoom an 11-second response on a seconds-scale timeline](docs/screenshots/layered-minute.png)
-
-These screenshots also use synthetic data, including the isolated test import shown as “local data.” No private session titles or conversations are included.
+![Session detail: execution time, conversation span, closed waiting, and individual turns](docs/promo/2026-10-22-glacier/sessions.png)
 
 </details>
+
+All promotional illustrations use fictional projects and synthetic data. No private session titles or conversations are included.
 
 ## Try it locally
 
@@ -104,7 +108,7 @@ API-equivalent cost estimates may follow once pricing and model coverage can be 
 
 Useful contributions include feedback on the timeline, reproducible parser edge cases, accessibility improvements, translations, and new source adapters with documented evidence. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and use **synthetic or carefully sanitized examples** when opening an [issue](https://github.com/atom077/oh-my-niumas/issues).
 
-For architecture, metric definitions, source findings, and verification records, see the [technical guide](docs/TECHNICAL.md). The original [product and design brief](oh-my-niumas-project/PROJECT.md) includes early visual explorations, clearly separate from the working screenshots above.
+For architecture, metric definitions, source findings, and verification records, see the [technical guide](docs/TECHNICAL.md). The original [product and design brief](oh-my-niumas-project/PROJECT.md) includes early visual explorations; the images above are promotional illustrations using synthetic data.
 
 ## License
 

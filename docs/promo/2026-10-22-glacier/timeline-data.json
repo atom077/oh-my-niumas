@@ -1,0 +1,111 @@
+{
+  "synthetic": true,
+  "date": "2026-10-22",
+  "hour": "10:00–11:00",
+  "projects": 3,
+  "sessions": 5,
+  "hourWorkloadSeconds": 6300,
+  "day": {
+    "workloadMinutes": 300,
+    "coverageMinutes": 180,
+    "averageParallelism": 1.6666666666666667,
+    "knownCodexTokens": 540000
+  },
+  "rows": [
+    {
+      "project": "前端应用",
+      "name": "组件布局调整",
+      "provider": "Codex",
+      "workloadSeconds": 900,
+      "turns": [
+        {
+          "number": 1,
+          "start": "10:04:00",
+          "end": "10:08:00",
+          "seconds": 240
+        },
+        {
+          "number": 2,
+          "start": "10:10:00",
+          "end": "10:14:00",
+          "seconds": 240
+        },
+        {
+          "number": 3,
+          "start": "10:21:20",
+          "end": "10:21:31",
+          "seconds": 11
+        },
+        {
+          "number": 4,
+          "start": "10:25:00",
+          "end": "10:31:49",
+          "seconds": 409
+        }
+      ]
+    },
+    {
+      "project": "前端应用",
+      "name": "交互动效验证",
+      "provider": "Cursor",
+      "inferred": true,
+      "workloadSeconds": 900,
+      "turns": [
+        {
+          "start": "10:20:00",
+          "end": "10:35:00",
+          "seconds": 900
+        }
+      ]
+    },
+    {
+      "project": "数据服务",
+      "name": "查询性能优化",
+      "provider": "Codex",
+      "workloadSeconds": 2700,
+      "turns": [
+        {
+          "start": "10:00:00",
+          "end": "10:45:00",
+          "seconds": 2700
+        }
+      ]
+    },
+    {
+      "project": "移动应用",
+      "name": "接口联调",
+      "provider": "Codex",
+      "workloadSeconds": 900,
+      "turns": [
+        {
+          "start": "10:30:00",
+          "end": "10:45:00",
+          "seconds": 900
+        }
+      ]
+    },
+    {
+      "project": "移动应用",
+      "name": "页面样式完善",
+      "provider": "Cursor",
+      "inferred": true,
+      "workloadSeconds": 900,
+      "turns": [
+        {
+          "start": "10:45:00",
+          "end": "11:00:00",
+          "seconds": 900
+        }
+      ]
+    }
+  ],
+  "selected": {
+    "project": "前端应用",
+    "session": "组件布局调整",
+    "turn": 3,
+    "executionSeconds": 11,
+    "fragmentExecutionSeconds": 900,
+    "fragmentSpanSeconds": 1669,
+    "closedWaitSeconds": 769
+  }
+}

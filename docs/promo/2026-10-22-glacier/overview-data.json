@@ -1,0 +1,117 @@
+{
+  "synthetic": true,
+  "workloadMinutes": 300,
+  "coverageMinutes": 180,
+  "averageParallelism": 1.6666666666666667,
+  "knownCodexTokens": 540000,
+  "timeRange": {
+    "from": "09:00",
+    "to": "12:00"
+  },
+  "hourlyWorkloadMinutes": [
+    {
+      "hour": "09:00",
+      "minutes": 75
+    },
+    {
+      "hour": "10:00",
+      "minutes": 105
+    },
+    {
+      "hour": "11:00",
+      "minutes": 120
+    }
+  ],
+  "sourceWorkloadMinutes": [
+    {
+      "provider": "Codex",
+      "minutes": 210,
+      "percent": 70
+    },
+    {
+      "provider": "Cursor",
+      "minutes": 90,
+      "percent": 30
+    }
+  ],
+  "projectHourWorkloadMinutes": {
+    "前端应用": [
+      60,
+      30,
+      30
+    ],
+    "数据服务": [
+      15,
+      45,
+      30
+    ],
+    "移动应用": [
+      0,
+      30,
+      30
+    ],
+    "文档中心": [
+      0,
+      0,
+      30
+    ]
+  },
+  "inputCounts15Minutes": {
+    "前端应用": [
+      2,
+      3,
+      1,
+      2,
+      1,
+      2,
+      1,
+      1,
+      1,
+      1,
+      2,
+      1
+    ],
+    "数据服务": [
+      1,
+      0,
+      1,
+      0,
+      2,
+      1,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "移动应用": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      2,
+      1,
+      1,
+      1,
+      2,
+      1
+    ],
+    "文档中心": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}
