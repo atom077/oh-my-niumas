@@ -164,7 +164,6 @@ function ChartLegend({ sessions }: { sessions: readonly Session[] }) {
         <i className="key-input" />
         输入活动
       </span>
-      <small>等待下一次输入 ≠ 人工投入时间</small>
     </div>
   );
 }
@@ -248,12 +247,6 @@ export function CollaborationTimeline({
       fragmentTimes.reduce((a, b) => Math.min(a, b), Infinity)
     : null;
   const selectedDay = state.day ?? dayStart(selectedHour.from);
-  const cumulative =
-    data.metrics.reportedWorkloadMs === null &&
-    data.metrics.closedTurns === 0 &&
-    data.sessions.some((s) => s.turns.length > 0)
-      ? null
-      : data.metrics.workloadMs + (data.metrics.unlocatedReportedMs ?? 0);
   const openHour = (at: number) =>
     onChange({
       ...state,
@@ -329,19 +322,7 @@ export function CollaborationTimeline({
             </button>
           ))}
         </div>
-        {state.mode === "daily" ? (
-          <div className="layered-summary">
-            <span>
-              <b>{data.projects.length}</b> 个项目
-            </span>
-            <span>
-              <b>{data.sessions.length}</b> 个会话
-            </span>
-            <span>
-              AI 累计 <b>{duration(cumulative)}</b>
-            </span>
-          </div>
-        ) : (
+        {state.mode === "daily" ? null : (
           <button
             className="text-button"
             onClick={() => setMode(state.mode === "turns" ? "hour" : "daily")}
@@ -362,10 +343,7 @@ export function CollaborationTimeline({
             aria-label="项目活动概览"
           >
             <div className="panel-heading">
-              <div>
-                <h2>项目活动分布</h2>
-                <p>颜色表示输入活动密度，不代表持续执行。</p>
-              </div>
+              <h2>项目活动分布</h2>
               <div className="density-legend">
                 <span>少</span>
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -485,11 +463,11 @@ export function CollaborationTimeline({
                 ))}
               </div>
             </div>
-            <div className="density-caption">
-              空白格表示无输入；蓝色边框表示无输入但有已知执行。
-              {overview.step > DAY &&
-                `当前每格 ${overview.step / DAY} 天；可通过日期筛选细化。`}
-            </div>
+            {overview.step > DAY && (
+              <div className="density-caption">
+                当前每格 {overview.step / DAY} 天；可通过日期筛选细化。
+              </div>
+            )}
             {overview.multiDay && (
               <div className="day-hour-picker">
                 <label>
@@ -532,9 +510,6 @@ export function CollaborationTimeline({
               </button>
             </div>
           </section>
-          <p className="layered-note">
-            Cursor 执行区间按输入时间 + 记录时长推算；未通过校验的轮次只计记录时长、不绘制执行条。
-          </p>
         </>
       ) : (
         <>
@@ -596,8 +571,7 @@ export function CollaborationTimeline({
             <>
               <p className="hour-summary">
                 {new Set(hourly.map((s) => s.projectId)).size} 个项目 ·{" "}
-                {hourly.length} 个会话 · {inputCount} 次输入{" "}
-                <span>仅显示此小时有输入或执行的会话</span>
+                {hourly.length} 个会话 · {inputCount} 次输入
               </p>
               <section
                 className="panel hourly-panel"
@@ -657,7 +631,7 @@ export function CollaborationTimeline({
                                   </small>
                                 </button>
                                 {ss.some((s) => s.provider === "cursor") && (
-                                  <small>Cursor：执行条为推算</small>
+                                  <small>含推算</small>
                                 )}
                               </div>
                               {!closed &&
@@ -805,9 +779,6 @@ export function CollaborationTimeline({
                     ),
                   )}
                 />
-                <p className="layered-note">
-                  输入点位于执行条上方；密集输入按分钟合并，悬停可查看原始时间。越过右边界的执行条带有继续标记。
-                </p>
               </section>
             </>
           ) : session ? (
@@ -1178,12 +1149,6 @@ export function CollaborationTimeline({
                   </div>
                 )}
                 <ChartLegend sessions={[session]} />
-                {session.provider === "cursor" && (
-                  <p className="layered-note">
-                    Cursor 执行条 = 输入时间 + Cursor
-                    记录时长推算；与结尾消息不一致的轮次仅显示输入点。
-                  </p>
-                )}
               </section>
             </>
           ) : null}

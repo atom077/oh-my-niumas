@@ -20,6 +20,7 @@ test("Cursor 来源筛选、推算区间、记录时长与跨来源时间轴", a
   if (!address || typeof address === "string") throw Error("missing address");
   try {
     await page.goto(`http://127.0.0.1:${address.port}/?source=demo`);
+    await page.getByRole("button", { name: "说明与设置", exact: true }).click();
     await page.getByLabel("数据来源").selectOption("local");
     await page.getByLabel("日期范围").selectOption("all");
     await page
@@ -28,6 +29,11 @@ test("Cursor 来源筛选、推算区间、记录时长与跨来源时间轴", a
     await expect(page.locator(".import-summary")).toContainText(
       "Cursor 1 个会话",
     );
+    await expect(page.locator(".cursor-coverage")).toContainText(
+      "Cursor 执行区间按输入时间 + 记录时长推算",
+    );
+    await page.getByRole("button", { name: "总览", exact: true }).click();
+    await expect(page.locator(".cursor-coverage")).toHaveCount(0);
     await expect(page.locator(".density-row")).toHaveCount(1);
     await page.getByRole("button", { name: "小时分段", exact: true }).click();
     await expect(page.locator(".hour-session-row")).toHaveCount(2);
@@ -39,20 +45,22 @@ test("Cursor 来源筛选、推算区间、记录时长与跨来源时间轴", a
     await expect(page.locator(".metrics .metric").first()).toContainText(
       "AI 累计时长 · Cursor 记录",
     );
-    await expect(page.locator(".metrics .metric").first()).toContainText(
+    const info = (n: number) =>
+      page.locator(".metrics .metric").nth(n).locator(".metric-info");
+    await expect(info(0)).toHaveAttribute(
+      "title",
       "记录覆盖 2/2 轮 · 推算区间 1 轮",
+    );
+    await expect(page.locator(".metrics .metric").first()).toContainText(
+      "含推算",
     );
     await expect(
       page.locator(".metrics .metric").nth(1).locator("strong"),
     ).toHaveText("40.0 s");
-    await expect(page.locator(".metrics .metric").nth(1)).toContainText(
-      "含 Cursor 推算区间",
-    );
-    await expect(page.locator(".metrics .metric").nth(2)).toContainText(
+    await expect(info(1)).toHaveAttribute("title", /含 Cursor 推算区间/);
+    await expect(info(2)).toHaveAttribute(
+      "title",
       "含 Cursor 推算 · 40.0 s ÷ 40.0 s",
-    );
-    await expect(page.locator(".cursor-coverage")).toContainText(
-      "Cursor 执行区间按输入时间 + 记录时长推算",
     );
     await page.screenshot({
       path: "docs/screenshots/cursor-overview.png",
@@ -61,7 +69,7 @@ test("Cursor 来源筛选、推算区间、记录时长与跨来源时间轴", a
     await page.getByRole("button", { name: "项目", exact: true }).click();
     await expect(page.locator("tbody tr td").nth(2)).toContainText("1.3 min");
     await expect(page.locator("tbody tr td").nth(2)).toContainText(
-      "Cursor 记录",
+      "含 Cursor 推算",
     );
     await page.getByRole("button", { name: "会话", exact: true }).click();
     await expect(page.locator("tbody tr")).toHaveCount(1);
@@ -77,7 +85,7 @@ test("Cursor 来源筛选、推算区间、记录时长与跨来源时间轴", a
     await expect(
       page.locator(".detail-metrics .metric strong").first(),
     ).toHaveText("1.3 min");
-    await page.getByRole("button", { name: "时间轴", exact: true }).click();
+    await page.getByRole("button", { name: "总览", exact: true }).click();
     await expect(page.locator(".density-row")).toHaveCount(1);
     await page.getByRole("button", { name: "小时分段", exact: true }).click();
     await expect(page.locator(".hourly-panel")).toContainText(
@@ -116,11 +124,13 @@ test("Cursor 来源筛选、推算区间、记录时长与跨来源时间轴", a
     );
     await page.getByLabel("会话来源").selectOption("");
     await expect(page.locator(".metric strong").first()).toHaveText("11.3 min");
-    await expect(page.locator(".metrics .metric").first()).toContainText(
-      "Codex 10 min + Cursor 推算 40.0 s + 未定位记录 40.0 s",
+    await expect(info(0)).toHaveAttribute(
+      "title",
+      /Codex 10 min \+ Cursor 推算 40\.0 s \+ 未定位记录 40\.0 s/,
     );
-    await expect(page.locator(".metrics .metric").nth(2)).toContainText(
-      "含 Cursor 推算 · 10.7 min ÷",
+    await expect(info(2)).toHaveAttribute(
+      "title",
+      /含 Cursor 推算 · 10\.7 min ÷/,
     );
     await page.getByRole("button", { name: "项目", exact: true }).click();
     await expect(page.locator("tbody tr td").nth(2)).toContainText("11.3 min");

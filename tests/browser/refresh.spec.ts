@@ -15,6 +15,7 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
   });
   try {
     await page.goto("/?source=demo");
+    await page.getByRole("button", { name: "说明与设置", exact: true }).click();
     await page.getByLabel("数据来源").selectOption("local");
     await expect(page.getByLabel("自动刷新")).toBeVisible();
     await expect(page.getByLabel("自动刷新")).toHaveValue("off");
@@ -103,6 +104,7 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
     await page.clock.runFor(60000);
     expect(scans).toBe(off);
     await page.getByLabel("自动刷新").selectOption("15");
+    await page.getByRole("button", { name: "说明与设置", exact: true }).click();
     await page.getByLabel("数据来源").selectOption("demo");
     await page.clock.runFor(60000);
     expect(scans).toBe(off);
@@ -116,6 +118,7 @@ test("准实时刷新保持详情，处理追加截断、错误恢复、暂停�
 test("慢刷新不重叠，切换数据源取消过期结果", async ({ page }) => {
   await page.clock.install();
   await page.goto("/?source=demo");
+  await page.getByRole("button", { name: "说明与设置", exact: true }).click();
   await page.getByLabel("数据来源").selectOption("local");
   await page.getByRole("button", { name: "扫描 / 刷新", exact: true }).click();
   await expect(
@@ -143,6 +146,7 @@ test("慢刷新不重叠，切换数据源取消过期结果", async ({ page }) 
   expect(calls).toBe(1);
   await page.getByLabel("数据来源").selectOption("demo");
   release();
+  await page.getByRole("button", { name: "总览", exact: true }).click();
   await expect(page.locator(".metric strong").first()).toHaveText("100 min");
   await page.clock.runFor(60000);
   expect(calls).toBe(1);
@@ -162,11 +166,15 @@ for (const mode of ["关闭", "隐藏"])
     try {
       await page.clock.install();
       await page.goto("/?source=demo");
+      await page
+        .getByRole("button", { name: "说明与设置", exact: true })
+        .click();
       await page.getByLabel("数据来源").selectOption("local");
       await page.getByLabel("日期范围").selectOption("all");
       await page
         .getByRole("button", { name: "扫描 / 刷新", exact: true })
         .click();
+      await page.getByRole("button", { name: "总览", exact: true }).click();
       await expect(page.locator(".metric strong").first()).toHaveText("10 min");
       await appendFile(
         input,

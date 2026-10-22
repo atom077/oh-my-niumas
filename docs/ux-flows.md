@@ -1,5 +1,7 @@
 # 精简 UX 与四页线框
 
+> 2026-10-21 更新：时间轴页已并入总览，解释性文字与本地设置集中到“说明与设置”，列表默认按 AI 执行时长排序。以 [PROJECT.md](../oh-my-niumas-project/PROJECT.md) 前部同日决策为准，下文保留为历史线框。
+
 状态：2026-10-19 设计依据。本文为文字线框，对应四页本地 Demo 已实现，启动方式见 [README](../README.md)。依据 [PROJECT.md](../oh-my-niumas-project/PROJECT.md) 前部品牌与精简策略；统计规则见 [metrics-spec.md](metrics-spec.md)。
 
 ## 2026-10-20 已确认的三层时间轴

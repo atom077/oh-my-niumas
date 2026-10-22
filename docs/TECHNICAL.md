@@ -142,7 +142,7 @@ Token accounting keeps source scope, deduplicates repeated reports, handles cumu
 
 ### Local organization
 
-**项目 → 管理本地项目** saves aliases, merges directories, or restores grouping. Restoring the leading directory splits its entire merged group; restoring a member removes only that member. Aliases are limited to 80 characters. Session detail accepts searchable notes up to 500 characters. Empty text clears a label; slash-containing or absolute-path text is rejected. Annotations persist locally and are independent from synthetic demo labels.
+**说明与设置 → 管理本地项目** saves aliases, merges directories, or restores grouping. Restoring the leading directory splits its entire merged group; restoring a member removes only that member. Aliases are limited to 80 characters. Session detail accepts searchable notes up to 500 characters. Empty text clears a label; slash-containing or absolute-path text is rejected. Annotations persist locally and are independent from synthetic demo labels.
 
 ## Privacy, caching, and resource limits
 

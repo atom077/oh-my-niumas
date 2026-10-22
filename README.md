@@ -89,7 +89,7 @@ Waiting for your next input is not your working time. A long conversation is not
 
 The vision is a **personal flight recorder for working with a team of AI agents**: understand the work, the handoffs, and your own coordination patterns across tools, with enough context to trust what you see.
 
-The current early release includes four working pages, Codex and Cursor local imports, the three-level timeline, project organization, session notes, and optional automatic refresh. The next steps are proposals, with priority shaped by actual use:
+The current early release includes three analysis pages (overview with the timeline, projects, sessions) plus an explanations & settings page, lists sortable by AI execution time, Codex and Cursor local imports, the three-level timeline, project organization, session notes, and optional automatic refresh. The next steps are proposals, with priority shaped by actual use:
 
 - [ ] **Polish daily use:** clearer dense timelines, large-history performance, and a smoother first scan.
 - [ ] **English interface and broader platform validation:** make the experience easier to use beyond the current macOS / Chinese UI setup.

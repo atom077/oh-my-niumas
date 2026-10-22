@@ -7,7 +7,7 @@ import { createApp } from "../../app/server.ts";
 test("全天项目密度可下钻小时与分钟轮次，返回后保持选择", async ({ page }) => {
   await page.goto("/?source=demo");
   await expect(page.locator(".density-row")).toHaveCount(2);
-  await expect(page.locator(".activity-overview")).toContainText(
+  await expect(page.locator(".activity-overview")).not.toContainText(
     "不代表持续执行",
   );
   await page.screenshot({
@@ -75,9 +75,8 @@ test("小时边界、空时段和全局筛选重置层级，不改统计", async
   await expect(page.locator(".wait-mark")).toHaveCount(0);
   await page.getByLabel("显示闭合等待").check();
   await expect(page.locator(".wait-mark")).not.toHaveCount(0);
-  await page
-    .getByRole("button", { name: "展开完整时间轴 ↗", exact: true })
-    .click();
+  await page.getByRole("button", { name: "项目", exact: true }).click();
+  await page.getByRole("button", { name: "总览", exact: true }).click();
   await expect(page.getByLabel("小时开始")).toHaveValue("2026-10-19T09:00");
   await page.screenshot({
     path: "docs/screenshots/timeline-range.png",
@@ -93,7 +92,9 @@ test("小时边界、空时段和全局筛选重置层级，不改统计", async
 
 test("多天概览按上海日期聚合，选日期后可进入具体小时", async ({ page }) => {
   await page.goto("/?source=demo");
+  await page.getByRole("button", { name: "说明与设置", exact: true }).click();
   await page.getByLabel("演示场景").selectOption("boundaries");
+  await page.getByRole("button", { name: "总览", exact: true }).click();
   await expect(page.getByLabel("概览日期")).toBeVisible();
   await page.getByLabel("概览日期").fill("2026-10-19");
   await page
@@ -197,7 +198,6 @@ test("本机短问答在分钟视窗可读，缩放与刷新保留已选轮次",
 
 test("高级区间分析保留自定义范围、缩放、状态与同轴并发", async ({ page }) => {
   await page.goto("/?source=demo");
-  await page.getByRole("button", { name: "时间轴", exact: true }).click();
   await page
     .getByText("高级区间分析 · 自由缩放与并发", { exact: true })
     .click();

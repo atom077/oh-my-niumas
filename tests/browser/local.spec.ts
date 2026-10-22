@@ -17,13 +17,13 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
   );
   try {
     await page.goto("/?source=demo");
+    await page.getByRole("button", { name: "说明与设置", exact: true }).click();
     await page.getByLabel("数据来源").selectOption("local");
     await page.getByLabel("日期范围").selectOption("all");
     await page
       .getByRole("button", { name: "扫描 / 刷新", exact: true })
       .click();
     await expect(page.locator(".import-summary")).toContainText("2 个日志");
-    await page.getByRole("button", { name: "项目", exact: true }).click();
     await page.getByText("管理本地项目", { exact: true }).click();
     const names = page.getByLabel("项目别名");
     await names.nth(0).fill("前端体验");
@@ -43,6 +43,10 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
       .getByRole("button", { name: "合并", exact: true })
       .nth(1)
       .click();
+    await expect(page.locator(".local-labels [role=status]")).toContainText(
+      "已保存",
+    );
+    await page.getByRole("button", { name: "项目", exact: true }).click();
     await expect(page.locator("tbody tr")).toHaveCount(1);
     await page.getByRole("button", { name: "查看会话 →" }).click();
     await expect(page.locator("tbody tr")).toHaveCount(2);
@@ -60,12 +64,16 @@ test("本地项目别名、合并恢复及会话备注贯通筛选和刷新", as
     await page.getByLabel("搜索会话").fill("登录回归");
     await expect(page.locator("tbody tr")).toHaveCount(1);
     await page.getByRole("button", { name: "清除筛选 ↺" }).click();
-    await page.getByRole("button", { name: "项目", exact: true }).click();
+    await page.getByRole("button", { name: "说明与设置", exact: true }).click();
     await page.getByText("管理本地项目", { exact: true }).click();
     await page
       .getByRole("button", { name: "恢复原始归属", exact: true })
       .nth(1)
       .click();
+    await expect(page.locator(".local-labels [role=status]")).toContainText(
+      "已保存",
+    );
+    await page.getByRole("button", { name: "项目", exact: true }).click();
     await expect(page.locator("tbody tr")).toHaveCount(2);
     await page.screenshot({
       path: "docs/screenshots/local-labels.png",
@@ -82,10 +90,12 @@ test("扫描过本机日志后，默认打开本机数据", async ({ page }) => 
   await page.getByRole("button", { name: "扫描 / 刷新", exact: true }).click();
   await expect(page.locator(".refresh-status")).toContainText("最近刷新");
   await page.goto("/");
-  await expect(page.getByLabel("数据来源")).toHaveValue("local");
   await expect(page.locator(".source-pill")).toHaveText("本机只读");
   await expect(page.locator(".density-matrix")).toContainText("http-demo");
   await expect(page.locator(".metric strong").first()).toHaveText("10 min");
+  await page.getByRole("button", { name: "说明与设置", exact: true }).click();
+  await expect(page.getByLabel("数据来源")).toHaveValue("local");
   await page.getByLabel("数据来源").selectOption("demo");
+  await page.getByRole("button", { name: "总览", exact: true }).click();
   await expect(page.locator(".metric strong").first()).toHaveText("100 min");
 });
