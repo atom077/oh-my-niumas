@@ -2,11 +2,12 @@
 
 The project's own code is distributed under [MIT](LICENSE). Dependencies retain their respective licenses; this file does not relicense them. Keep the license / notice files supplied with dependencies when redistributing their code or a bundled application.
 
-This inventory is based on the committed `package-lock.json` at open-source preparation, 2026-10-21. Review it again when dependencies change.
+This inventory is based on the committed `package-lock.json`, reviewed on 2026-10-22. Review it again when dependencies change.
 
 | Runtime dependency | License |
 | --- | --- |
 | React, React DOM, Scheduler | MIT |
+| Phosphor Icons React | MIT |
 | Apache ECharts | Apache-2.0 |
 | zrender | BSD-3-Clause |
 | tslib | 0BSD |

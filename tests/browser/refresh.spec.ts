@@ -200,8 +200,12 @@ for (const mode of ["关闭", "隐藏"])
         await route.fulfill({ response: snapshot }).catch(() => {});
       });
       await page.getByLabel("自动刷新").selectOption("15");
-      await page.clock.runFor(15000);
-      await expect.poll(() => captured).toBe(true);
+      // React's passive timer effect can commit after the select event; charts add passive work.
+      // Advance until a real analysis request is held, rather than racing one exact clock tick.
+      await expect.poll(async () => {
+        if (!captured) await page.clock.runFor(15000);
+        return captured;
+      }).toBe(true);
       if (mode === "关闭")
         await page.getByLabel("自动刷新").selectOption("off");
       else

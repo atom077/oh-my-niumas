@@ -303,6 +303,16 @@ export function CollaborationTimeline({
       className={`collaboration-timeline${compact ? " compact-timeline" : ""}`}
       data-mode={state.mode}
     >
+      {state.mode === "daily" && data.sessions.length > 0 && (
+        <div className="activity-heading panel-heading">
+          <div className="activity-title"><h2>项目活动分布</h2><span>{data.projects.length} 个项目 · {data.sessions.length} 个会话</span></div>
+          <div className="density-legend" aria-label="输入密度图例">
+            <span>输入密度{overview.multiDay ? "" : "（每 15 分钟）"}</span>
+            {[0, 1, 2, 3, 4].map((i) => <i key={i} className={`density-level-${i}`} />)}
+            <span>多</span>
+          </div>
+        </div>
+      )}
       <div className="layered-navigation">
         <div className="segmented" role="group" aria-label="时间轴层级">
           {(
@@ -342,16 +352,6 @@ export function CollaborationTimeline({
             className="activity-overview panel"
             aria-label="项目活动概览"
           >
-            <div className="panel-heading">
-              <h2>项目活动分布</h2>
-              <div className="density-legend">
-                <span>少</span>
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <i key={i} className={`density-level-${i}`} />
-                ))}
-                <span>多</span>
-              </div>
-            </div>
             <div className="density-scroll">
               <div
                 className="density-matrix"
@@ -360,15 +360,16 @@ export function CollaborationTimeline({
                 }}
               >
                 <div className="density-axis">
-                  <span>项目（共 {data.projects.length} 个）</span>
+                  <span className="sr-only">项目（共 {data.projects.length} 个）</span>
                   <div>
                     {overview.bins.map((bin, i) => {
                       const label = overview.multiDay
                         ? dateKey(bin.from).slice(5)
                         : clock(bin.from);
-                      return overview.multiDay || i % 4 === 0 ? (
+                      return overview.multiDay || overview.bins.length <= 16 || i % 4 === 0 ? (
                         <span
                           key={bin.from}
+                          className={!overview.multiDay && bin.from === selectedHour.from ? "selected-hour-tick" : undefined}
                           style={{
                             left: `${(100 * i) / overview.bins.length}%`,
                           }}
@@ -377,6 +378,7 @@ export function CollaborationTimeline({
                         </span>
                       ) : null;
                     })}
+                    {!overview.multiDay && <span className="end-tick">{clock(overview.to)}</span>}
                   </div>
                 </div>
                 {overview.rows.map(({ project, sessions, cells }) => (
@@ -384,9 +386,10 @@ export function CollaborationTimeline({
                     key={project.id}
                     className="density-row"
                     data-project={project.name}
+                    data-provider={sessions.every((s) => s.provider === "cursor") ? "cursor" : sessions.every((s) => s.provider !== "cursor") ? "codex" : "mixed"}
                   >
                     <div className="density-project">
-                      <div>
+                      <div className="density-project-name">
                         <strong title={project.name}>{project.name}</strong>
                         <small>
                           {sessions.length} 个会话 ·{" "}
@@ -498,17 +501,6 @@ export function CollaborationTimeline({
                 </div>
               </div>
             )}
-            <div className="density-selection">
-              <span>
-                已选 <b>{rangeLabel(selectedHour)}</b>
-              </span>
-              <button
-                className="primary-button"
-                onClick={() => openHour(selectedHour.from)}
-              >
-                查看这一小时 →
-              </button>
-            </div>
           </section>
         </>
       ) : (

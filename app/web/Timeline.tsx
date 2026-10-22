@@ -65,7 +65,7 @@ const GRID = { top: 35, bottom: 75 };
  */
 const RUN_TINTS = [
   { base: "#4b83e8", soft: "#80a8f0", ink: "#2f62c4" },
-  { base: "#2a2e36", soft: "#5d636f", ink: "#14161a" },
+  { base: "#9a73ff", soft: "#c5afff", ink: "#6943c8" },
   { base: "#5a6a8a", soft: "#8d9ab3", ink: "#3c4863" },
   { base: "#d9876f", soft: "#edb3a2", ink: "#bb7867" },
 ] as const;

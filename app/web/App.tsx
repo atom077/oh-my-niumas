@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { SquaresFour, Folders, ListBullets, Info, ArrowsClockwise, CalendarBlank, MagnifyingGlass } from "@phosphor-icons/react";
+import { WorkloadCharts } from "./WorkloadCharts";
+import { dayStart } from "./activity-model";
 import type { Analysis, Session } from "../core/types";
 import { duration, time, tokens } from "./Timeline";
 import {
@@ -42,13 +45,13 @@ interface LocalAvailability {
   lastAt: number | null;
 }
 /** The overview hosts the layered timeline, so analysis needs only three pages. */
-const pages: { id: Page; icon: string; name: string }[] = [
-  { id: "overview", icon: "◫", name: "总览" },
-  { id: "projects", icon: "▧", name: "项目" },
-  { id: "sessions", icon: "☷", name: "会话" },
+const pages: { id: Page; icon: ReactNode; name: string }[] = [
+  { id: "overview", icon: <SquaresFour size={19} />, name: "总览" },
+  { id: "projects", icon: <Folders size={19} />, name: "项目" },
+  { id: "sessions", icon: <ListBullets size={19} />, name: "会话" },
 ];
 /** Definitions, coverage evidence and rarely used settings live apart from the analysis pages. */
-const aboutPage = { id: "about" as const, icon: "ⓘ", name: "说明与设置" };
+const aboutPage = { id: "about" as const, icon: <Info size={20} />, name: "说明与设置" };
 const headings: Record<Page, string> = {
   overview: "AI 会话协作总览",
   projects: "项目",
@@ -72,6 +75,7 @@ const midnight = (day: string) => Date.parse(day + "T00:00:00+08:00");
 const shortDate = (at: number) =>
   new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
+    year: "numeric",
     month: "long",
     day: "numeric",
     weekday: "short",
@@ -387,98 +391,100 @@ export function App() {
             </span>
             {aboutPage.name}
           </button>
-          <strong>
-            代码不一定我写，
-            <br />
-            进度一定我催。
-          </strong>
         </div>
       </aside>
       <main>
-        <div className="content" aria-busy={loading || preparing}>
-          <div className="page-heading">
-            <h1>
-              {headings[page]}
-              <span className="title-dot">.</span>
-            </h1>
-            {data && <span className="date-chip">{dateLabel}</span>}
-          </div>
-          <div className="filterbar">
-            {source === "local" && (
+        <div className={`content page-${page}`} aria-busy={loading || preparing}>
+          <header className="page-toolbar">
+            <div className="page-heading">
+              <h1>
+                {headings[page]}
+                <span className="title-dot">.</span>
+              </h1>
+            </div>
+            <div className="filterbar">
+              {data && <span className="date-chip"><CalendarBlank size={16} />{dateLabel}</span>}
+              {source === "local" && (
+                <select
+                  aria-label="会话来源"
+                  value={provider}
+                  onChange={(e) => {
+                    setProvider(e.target.value);
+                    setProject("");
+                    setSelected("");
+                    setTimelineState({ mode: "daily" });
+                  }}
+                >
+                  <option value="">全部来源</option>
+                  <option value="codex">Codex</option>
+                  <option value="cursor">Cursor</option>
+                </select>
+              )}
+              {source === "local" && <span className="filter-divider" />}
               <select
-                aria-label="会话来源"
-                value={provider}
+                aria-label="日期范围"
+                value={range}
+                onChange={(e) => setRange(e.target.value)}
+              >
+                <option value="all">全部活动</option>
+                <option value="today">今天</option>
+                <option value="7">最近 7 天</option>
+                <option value="30">最近 30 天</option>
+                {source === "demo" && scenario === "parallel" && (
+                  <option value="middle">09:20 — 09:30</option>
+                )}
+                <option value="custom">自定义时间</option>
+              </select>
+              <select
+                aria-label="项目筛选"
+                value={project}
                 onChange={(e) => {
-                  setProvider(e.target.value);
-                  setProject("");
+                  setProject(e.target.value);
                   setSelected("");
-                  setTimelineState({ mode: "daily" });
                 }}
               >
-                <option value="">Codex + Cursor</option>
-                <option value="codex">Codex</option>
-                <option value="cursor">Cursor</option>
+                <option value="">全部项目</option>
+                {(data?.projectOptions ?? data?.projects ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
-            )}
-            {source === "local" && <span className="filter-divider" />}
-            <select
-              aria-label="日期范围"
-              value={range}
-              onChange={(e) => setRange(e.target.value)}
-            >
-              <option value="all">全部活动</option>
-              <option value="today">今天</option>
-              <option value="7">最近 7 天</option>
-              <option value="30">最近 30 天</option>
-              {source === "demo" && scenario === "parallel" && (
-                <option value="middle">09:20 — 09:30</option>
+              <label className="toolbar-search">
+                <MagnifyingGlass size={16} aria-hidden="true" />
+                <input
+                aria-label="搜索会话"
+                value={search}
+                placeholder="搜索会话"
+                onChange={(e) => setSearch(e.target.value)}
+                />
+              </label>
+              {source === "local" && (
+                <div className="refresh-group">
+                  <button
+                    className="refresh-button"
+                    aria-label={live.busy ? "只读扫描中…" : "扫描 / 刷新"}
+                    title={live.busy ? "只读扫描中…" : "扫描 / 刷新"}
+                    disabled={live.busy || loading}
+                    onClick={() => void live.refresh()}
+                  >
+                    <ArrowsClockwise size={18} className={live.busy ? "is-refreshing" : ""} />
+                  </button>
+                  <select
+                    aria-label="自动刷新"
+                    value={live.period}
+                    disabled={!importStatus?.updatedAt}
+                    onChange={(e) => live.changePeriod(e.target.value)}
+                  >
+                    <option value="off">自动：关</option>
+                    <option value="15">每 15 秒</option>
+                    <option value="30">每 30 秒</option>
+                    <option value="60">每 60 秒</option>
+                  </select>
+                </div>
               )}
-              <option value="custom">自定义时间</option>
-            </select>
-            <select
-              aria-label="项目筛选"
-              value={project}
-              onChange={(e) => {
-                setProject(e.target.value);
-                setSelected("");
-              }}
-            >
-              <option value="">全部项目</option>
-              {(data?.projectOptions ?? data?.projects ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <input
-              aria-label="搜索会话"
-              value={search}
-              placeholder="搜索会话"
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {source === "local" && (
-              <div className="refresh-group">
-                <button
-                  className="refresh-button"
-                  disabled={live.busy || loading}
-                  onClick={() => void live.refresh()}
-                >
-                  {live.busy ? "只读扫描中…" : "扫描 / 刷新"}
-                </button>
-                <select
-                  aria-label="自动刷新"
-                  value={live.period}
-                  disabled={!importStatus?.updatedAt}
-                  onChange={(e) => live.changePeriod(e.target.value)}
-                >
-                  <option value="off">自动刷新：关</option>
-                  <option value="15">每 15 秒</option>
-                  <option value="30">每 30 秒</option>
-                  <option value="60">每 60 秒</option>
-                </select>
-              </div>
-            )}
-          </div>
+            </div>
+          </header>
           {range === "custom" && (
             <div className="date-controls">
               <label>
@@ -548,7 +554,8 @@ export function App() {
                 </span>
                 {data.source === "local" && (
                   <span className="refresh-status" role="status">
-                    {importStatus?.updatedAt
+                    <span className="refresh-compact" aria-hidden="true">{importStatus?.updatedAt ? `本机数据 · ${time(Date.parse(importStatus.updatedAt))}` : "尚未扫描"}</span>
+                    <span className="refresh-detail">{importStatus?.updatedAt
                       ? `最近刷新 ${time(
                           Date.parse(importStatus.updatedAt),
                         )} · ${importStatus.sessions} 个会话 · 新增 ${
@@ -560,7 +567,7 @@ export function App() {
                         ? " · 页面隐藏，自动刷新暂停"
                         : live.busy
                         ? " · 正在只读扫描"
-                        : ` · 每 ${live.period} 秒刷新`)}
+                        : ` · 每 ${live.period} 秒刷新`)}</span>
                   </span>
                 )}
                 {issueCount > 0 && (
@@ -681,8 +688,8 @@ export function App() {
                       value={tokens(metrics!.tokens)}
                       tag={
                         metrics!.tokenSessions < codexSessions
-                          ? `${metrics!.tokenSessions}/${codexSessions} 会话`
-                          : undefined
+                          ? `${metrics!.tokenSessions}/${codexSessions} 会话 · 仅 Codex`
+                          : "仅 Codex"
                       }
                       note={`${metrics!.tokenSessions}/${codexSessions} 个 Codex 会话有计数 · 按上报时间归属`}
                     />
@@ -708,6 +715,19 @@ export function App() {
                     onChange={setTimelineState}
                     onSession={openSession}
                     compact
+                  />
+                  <WorkloadCharts
+                    data={data}
+                    onPeriod={(at, step) => setTimelineState({
+                      mode: step >= 86_400_000 ? "daily" : "hour",
+                      day: dayStart(at),
+                      hour: at,
+                    })}
+                    onProvider={source === "local" ? (next) => {
+                      setProvider(provider === next ? "" : next);
+                      setProject("");
+                      setSelected("");
+                    } : undefined}
                   />
                   <AdvancedTimeline
                     data={data}
@@ -985,7 +1005,7 @@ function Metric({
         {label}
         {tag && <span className="metric-tag">{tag}</span>}
         <span className="metric-info" title={note} aria-label={note} role="img">
-          ⓘ
+          <Info size={14} />
         </span>
       </div>
       <strong>{value}</strong>
