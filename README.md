@@ -1,70 +1,70 @@
 # 🐮 oh-my-牛马s
 
-### The AI Agent Herding Dashboard
+### 我的赛博牛马们，今天干了多少活？
 
-**I used to do the work. Now I manage the herd.**<br>
+**以前我是牛马，现在我是牛马的项目经理。**<br>
 **Stop coding. Start herding.**
 
-[English](README.md) · [简体中文](README_zh.md) · [Technical guide](docs/TECHNICAL.md) · [Contributing](CONTRIBUTING.md)
+[English](README_en.md) · [简体中文](README.md) · [技术指南](docs/TECHNICAL.md) · [参与贡献](CONTRIBUTING.md)
 
-A local-first dashboard for developers working with several AI sessions at once. Bring **Codex and Cursor** into one view, follow overlapping work on a shared timeline, and understand how your day with AI actually unfolded.
+给同时使用多个 AI 会话的开发者，一个本地优先的协作看板。把 **Codex 和 Cursor** 放进同一张时间轴，看清多线并行、执行与停顿，还原你和一群 AI 协作的一天。
 
-> “Niu ma” (牛马, literally “cattle and horses”) is Chinese internet slang for an overworked worker. Here, the joke is on us: we finally got AI to do the work—and became project managers.
+> 给牛马 A 派活，催牛马 B 改 Bug，检查牛马 C 的产出，还要记得回复牛马 D。代码不一定我写，进度一定我催。
 
-![Overview: a calm workspace for projects, AI workload, and collaboration](docs/promo/2026-10-22-glacier/overview.png)
+![总览：用一个清爽的工作台看项目、AI 工作量与协作节奏](docs/promo/2026-10-22-glacier/overview.png)
 
-*Promotional UI mockups using synthetic example data. The interface is currently in Simplified Chinese; an English UI is on the roadmap.*
+*UI 效果图，全部采用合成示例数据。当前界面为简体中文，英文界面列入后续规划。*
 
-## Why this exists
+## 为什么做这个项目
 
-You ask one session to build a feature, another to fix a bug, and a third to review the result. Then you spend the afternoon switching tabs, checking what finished, and remembering where to reply.
+AI 越来越能干，我们也越来越像项目经理：一个会话开发功能，一个修 Bug，一个审查代码。你在不同窗口之间切换，等它们完成，再逐个查看、追问、推进。
 
-A chat history tells you what was said. A token counter tells you how much was used. **This dashboard puts the rhythm of collaboration on a clock:** when sessions overlapped, where work paused, and how separate conversations added up across projects.
+聊天历史能告诉你说过什么，Token 统计能告诉你用了多少。**oh-my-牛马s 想让协作的过程也可见：** 哪些会话同时开工，哪里停了下来，不同项目的工作如何交错在一起。
 
-| The everyday frustration | What you get |
+| 日常的痛点 | 你能获得什么 |
 | --- | --- |
-| Work is scattered across Codex, Cursor, and different projects. | One workspace with shared date, project, source, and search filters. |
-| A conversation stayed open all day. How long did AI actually work? | Execution time and conversation span shown separately, with coverage and uncertainty. |
-| Several sessions ran together, but the overlap is hard to see. | A shared timeline, active coverage, average parallelism, and peak concurrency. |
-| A whole day of tiny execution bars becomes unreadable. | Start with the day, open an hour, then zoom into an individual turn. |
-| Useful analytics seem to require uploading private conversations. | Read-only local imports and a local metadata cache. No cloud account or API key required. |
+| Codex、Cursor 和不同项目的数据散在各处。 | 一个工作台，统一日期、项目、来源与搜索筛选。 |
+| 会话开了一天，AI 到底执行了多久？ | 分开查看执行累计与会话跨度，明确覆盖情况与不确定性。 |
+| 同时派了几项任务，并行到底长什么样？ | 同轴时间条、活跃覆盖、平均并行倍数与峰值并发。 |
+| 全天时间轴把几秒钟的响应挤得看不清。 | 先看全天，点进一小时，再放大某个会话的单轮。 |
+| 想看协作数据，又不想上传私人对话。 | 只读本机日志，本地缓存元数据，无需云端账号或 API Key。 |
 
-## The satisfying part
+## 用起来的爽点
 
-### See the whole day, then find the moment
+### 从一整天，找到某一刻
 
-The timeline is the heart of the product: **daily project activity → hourly collaboration → individual turns**. See which sessions overlap within an hour and where they wait, then select a turn to inspect its start, end, and duration to the second. Your headline totals stay anchored to the selected date range while you drill down and zoom.
+时间轴是整个产品的主角：**全天项目活动 → 小时分段 → 会话轮次**。先看同一小时里哪些会话重叠执行、哪里在等待；再进入会话轮次，选中一次响应，查看精确到秒的起止与时长。下钻和缩放时，顶部统计仍然对应你选定的日期范围。
 
-![Hourly timeline: five sessions across three projects share one time axis, with overlapping execution, input activity, and closed waits](docs/promo/2026-10-22-glacier/timeline-hour.png)
+![时间轴·小时分段：三个项目、五个会话在同一小时内并行执行，区分输入活动与闭合等待](docs/promo/2026-10-22-glacier/timeline-hour.png)
 
-**Hourly collaboration: see parallel work at a glance.** Expand projects into sessions on a shared clock. Codex execution, inferred Cursor execution, input points, and closed waits have distinct visual meanings, making overlaps and gaps visible.
+**小时分段：一眼看见多线并行。** 项目展开为会话，执行区间共用同一条时间轴；Codex 执行、Cursor 推算、输入点与闭合等待分别表达，重叠与空档都看得见。
 
-![Turn timeline: separate execution and waiting per turn, with an 11-second response selected and exact timestamps plus a zoom action](docs/promo/2026-10-22-glacier/timeline-turns.png)
+![时间轴·会话轮次：逐轮查看执行与等待，选中一条 11 秒响应并展示秒级起止及放大入口](docs/promo/2026-10-22-glacier/timeline-turns.png)
 
-**Individual turns: inspect one response closely.** Each turn has its own row, positioned by time. Select the example's 11-second response to see its exact boundaries, then choose “放大这一轮” (Zoom into this turn) to look closer. Closed waits appear only where supported by evidence; they are not human working time.
+**会话轮次：把一轮对话看清楚。** 每轮独立一行，按发生时间展开；选中示例中的 11 秒响应，就能看到精确起止，再点“放大这一轮”继续查看。只有来源证据支持时才显示闭合等待，等待不等于人工工作时长。
 
-### Feel the parallelism
+### 并行的感觉，终于看得见
 
-Three sessions can produce **100 minutes of AI work in 50 minutes of active wall-clock time**. The demo makes that relationship visible: 100 minutes of workload, 50 minutes of coverage, and 2.0× average parallelism. It is a way to understand overlap, rather than a productivity score.
+三个会话，在 **50 分钟活跃的现实时间里，累计完成 100 分钟 AI 工作量**。内置 Demo 直接展示这个关系：工作量 100 分钟、活跃覆盖 50 分钟、平均并行 2.0×。这些数字帮助你理解重叠关系，不直接评价生产力高低。
 
-### Make the workspace yours
+### 把工作台整理成自己的样子
 
-Give projects readable aliases, merge related directories into one project, restore their original grouping, and add searchable session notes. Your labels survive refreshes and restarts. Optional 15 / 30 / 60-second refresh keeps local activity up to date while the page is visible.
+为项目起别名，把相关目录合并成一个项目，也能恢复原始归属；给会话写一条可搜索的短备注，刷新和重启后仍然保留。按需开启 15 / 30 / 60 秒自动刷新，页面可见时持续更新本机活动。
 
-![Projects: compare session counts, AI workload, closed waiting, and known tokens](docs/promo/2026-10-22-glacier/projects.png)
+![项目页：对比不同项目的会话数、AI 工作量、闭合等待与已知 Token](docs/promo/2026-10-22-glacier/projects.png)
 
 <details>
-<summary>Session details: execution totals, conversation span, and turn records</summary>
+<summary>查看会话详情：执行累计、跨度与逐轮明细</summary>
 
-![Session detail: execution time, conversation span, closed waiting, and individual turns](docs/promo/2026-10-22-glacier/sessions.png)
+![会话详情：分开查看执行累计、会话跨度、闭合等待与每轮明细](docs/promo/2026-10-22-glacier/sessions.png)
 
 </details>
 
-All promotional illustrations use fictional projects and synthetic data. No private session titles or conversations are included.
+所有推广效果图均采用虚构项目与合成数据，没有放入私人会话标题或对话。
 
-## Try it locally
+## 本地体验
 
-Requires **Node.js 24.11+**. macOS is the currently verified platform for local imports.
+需要 **Node.js 24.11+**。本机日志接入目前在 macOS 上核验。
 
 ```sh
 git clone https://github.com/atom077/oh-my-niumas.git
@@ -75,41 +75,41 @@ npm ci
 npm start
 ```
 
-Open **[http://127.0.0.1:4317/?source=demo](http://127.0.0.1:4317/?source=demo)** for the built-in three-session demo. No existing AI history is needed.
+打开 **[http://127.0.0.1:4317/?source=demo](http://127.0.0.1:4317/?source=demo)**，先体验三会话并行 Demo，不需要已有 AI 日志。
 
-To explore your own history, switch **数据来源 → 本机数据** (Data source → Local data), then click **扫描 / 刷新** (Scan / Refresh). You can filter Codex, Cursor, or both. After your first scan, the regular home URL prefers your available local data.
+查看自己的记录：将 **数据来源 → 本机数据**，点击 **扫描 / 刷新**。可以只看 Codex、只看 Cursor，或合并查看。首次扫描后，从普通首页进入会优先展示可用的本机数据。
 
-Configuration, development commands, platform notes, and troubleshooting live in the **[technical guide](docs/TECHNICAL.md)**.
+启动配置、开发命令、平台说明和排查方法统一放在 **[技术指南](docs/TECHNICAL.md)** 中。
 
-## Private by design, honest about the numbers
+## 数据留在本机，未知如实展示
 
-Imports read your local AI history without modifying it. Computation and the metadata cache stay on your machine; raw prompts, tool output, and full filesystem paths are kept out of the cache and dashboard API. Existing session titles are displayed locally from indexes and kept in memory. The service binds to loopback.
+导入只读本机 AI 历史，不修改源记录；计算和元数据缓存留在本机。原始提示词、工具输出、完整文件路径不会进入缓存或看板 API。现有索引会话标题仅在本机内存中加载展示，服务只监听本机回环地址。
 
-Codex timing comes from supported log boundaries. **Cursor execution intervals are inferred** only when local timing records pass consistency checks, and are labeled accordingly; other turns retain recorded durations or unknown activity. Cursor does not record real token usage locally, so **token figures are not shown for Cursor sessions**; token metrics cover Codex only. Coverage and concurrency use locatable intervals, including labeled inferences.
+Codex 执行时间取自已支持的日志边界。**Cursor 执行区间是带标注的推算值**，仅在本地计时记录通过一致性校验后采用；其他轮次保留记录时长或未知活动。Cursor 本机不记录真实 Token 用量，因此 **Cursor 会话不展示 Token**，Token 指标只统计 Codex。活跃覆盖与并发基于可定位区间计算，其中可能包含已标注的推算区间。
 
-Waiting for your next input is not your working time. A long conversation is not continuous AI execution. Missing evidence stays missing. See [sources, formulas, and limitations](docs/TECHNICAL.md#data-and-metric-contracts).
+等待你回复，不等于你一直在工作；会话开着，不等于 AI 一直在执行。没有证据的数据保留未知。详细说明见 [来源、公式与能力边界](docs/TECHNICAL.md#data-and-metric-contracts)。
 
-## Where we are going
+## 愿景与后续规划
 
-The vision is a **personal flight recorder for working with a team of AI agents**: understand the work, the handoffs, and your own coordination patterns across tools, with enough context to trust what you see.
+我们想把它做成 **一个人带一队 AI 的个人协作航行记录仪**：跨工具看清工作、交接与自己的调度节奏，也让每一个数字有足够的依据。
 
-The current early release includes three analysis pages (overview with the timeline, projects, sessions) plus an explanations & settings page, lists sortable by AI execution time, Codex and Cursor local imports, the three-level timeline, project organization, session notes, and optional automatic refresh. The next steps are proposals, with priority shaped by actual use:
+当前早期版本已有总览（含时间轴）、项目、会话三个分析页和一个说明与设置页，列表可按 AI 执行时长排序，并支持 Codex / Cursor 本机接入、三层时间轴、项目整理、会话备注与可选自动刷新。后续方向会根据实际使用反馈调整优先级，以下均为待实现规划：
 
-- [ ] **Polish daily use:** clearer dense timelines, large-history performance, and a smoother first scan.
-- [ ] **English interface and broader platform validation:** make the experience easier to use beyond the current macOS / Chinese UI setup.
-- [ ] **Weekly collaboration trends:** follow workload, known token usage, and parallelism over time.
-- [ ] **Portable results:** CSV / JSON exports and shareable, sanitized summaries.
-- [ ] **More agent sources:** investigate Claude Code and OpenCode after validating their local formats.
-- [ ] **Deeper evidence:** broader log-version coverage, verified parent/sub-agent relationships, and tool timing where supported.
+- [ ] **打磨日常体验：** 密集时间轴可读性、大量历史记录下的性能、首次扫描引导。
+- [ ] **英文界面与更多平台验证：** 让当前 macOS / 中文界面以外的使用者也能顺畅上手。
+- [ ] **每周协作趋势：** 持续观察工作量、已知 Token 用量与并行模式的变化。
+- [ ] **结果带得走：** CSV / JSON 导出与可分享的脱敏摘要。
+- [ ] **更多 AI 来源：** 核验本地格式后，探索 Claude Code 与 OpenCode 接入。
+- [ ] **更完整的证据：** 扩展日志版本覆盖、核验父子 Agent 关系、按来源能力细分工具耗时。
 
-API-equivalent cost estimates may follow once pricing and model coverage can be made explicit. Human-effort estimation remains an optional research direction requiring a separate privacy decision. This release focuses on observation; agent control and orchestration are outside its current scope.
+API 等价费用估算待模型与费率覆盖能够明确说明后再推进。人工投入估算保留为可选研究方向，需要另行确认隐私方案。当前版本聚焦观测，Agent 控制与编排不在本期范围内。
 
-## Build with us
+## 一起把它做得更好
 
-Useful contributions include feedback on the timeline, reproducible parser edge cases, accessibility improvements, translations, and new source adapters with documented evidence. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and use **synthetic or carefully sanitized examples** when opening an [issue](https://github.com/atom077/oh-my-niumas/issues).
+欢迎反馈时间轴体验、补充可复现的解析边界、改善无障碍体验、参与翻译，或带着格式证据贡献新的来源适配器。从 [贡献指南](CONTRIBUTING.md) 开始；提交 [Issue](https://github.com/atom077/oh-my-niumas/issues) 时，请使用 **合成或认真脱敏的样例**。
 
-For architecture, metric definitions, source findings, and verification records, see the [technical guide](docs/TECHNICAL.md). The original [product and design brief](oh-my-niumas-project/PROJECT.md) includes early visual explorations; the images above are promotional illustrations using synthetic data.
+架构、指标定义、日志发现和验证记录统一从 [技术指南](docs/TECHNICAL.md) 进入。[原始产品与设计文档](oh-my-niumas-project/PROJECT.md) 保留了早期视觉探索；上面展示的是使用合成数据的推广效果图。
 
-## License
+## 许可证
 
-[MIT](LICENSE). Third-party packages retain their own [licenses and notices](THIRD_PARTY_NOTICES.md). Independently developed; not affiliated with OpenAI or Cursor.
+[MIT](LICENSE)。第三方依赖保留各自的 [许可证与声明](THIRD_PARTY_NOTICES.md)。本项目独立开发，与 OpenAI、Cursor 无隶属关系。

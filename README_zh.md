@@ -5,7 +5,7 @@
 **以前我是牛马，现在我是牛马的项目经理。**<br>
 **Stop coding. Start herding.**
 
-[English](README.md) · [简体中文](README_zh.md) · [技术指南](docs/TECHNICAL.md) · [参与贡献](CONTRIBUTING.md)
+[English](README_en.md) · [简体中文](README.md) · [技术指南](docs/TECHNICAL.md) · [参与贡献](CONTRIBUTING.md)
 
 给同时使用多个 AI 会话的开发者，一个本地优先的协作看板。把 **Codex 和 Cursor** 放进同一张时间轴，看清多线并行、执行与停顿，还原你和一群 AI 协作的一天。
 
